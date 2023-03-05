@@ -6,33 +6,33 @@ export interface EffectiveAddressCalculation {
 
 export type SourceOrDestination = Register | EffectiveAddressCalculation;
 
-export interface AddInstruction {
-  readonly kind: 'ADD';
-}
-
-export interface MovInstruction {
-  readonly kind: 'MOV';
+export interface MovRegisterMemoryToFromRegister {
+  readonly kind: 'movRegisterMemoryToFromRegister';
   readonly dest: SourceOrDestination;
   readonly source: SourceOrDestination;
 }
 
-export interface OrInstruction {
-  readonly kind: 'OR';
+export interface MovImmediateToRegisterMemoryInstruction {
+  readonly kind: 'movImmediateToRegisterMemory';
+  readonly dest: SourceOrDestination;
+  readonly data: number;
 }
 
-export interface PopInstruction {
-  readonly kind: 'POP';
-}
-
-export interface PushInstruction {
-  readonly kind: 'PUSH';
+export interface MovImmediateToRegisterInstruction {
+  readonly kind: 'movImmediateToRegister';
+  readonly dest: Register;
+  readonly data: number;
 }
 
 export interface UnknownInstruction {
   readonly kind: 'UNKNOWN';
 }
 
-export type DecodedInstruction = MovInstruction | UnknownInstruction | AddInstruction;
+export type DecodedInstruction =
+  | MovRegisterMemoryToFromRegister
+  | MovImmediateToRegisterMemoryInstruction
+  | MovImmediateToRegisterInstruction
+  | UnknownInstruction;
 
 export function decodeInstructions(
   instructionBytes: Uint8Array,
@@ -44,7 +44,11 @@ export function decodeInstructions(
     const firstByte = instructionBytes[index];
     const firstSixBits = firstByte & 0b1111_1100;
 
+    let instruction: DecodedInstruction;
+
     switch (firstSixBits) {
+      // Register/memory to/from register
+      // Layout 1000 10dw
       case 0b1000_1000: {
         const dBit = firstByte & 0b0000_0010;
         const wBit = firstByte & 0b0000_0001;
@@ -83,19 +87,50 @@ export function decodeInstructions(
           source = sourceRm;
         }
 
-        instructions.push({
-          kind: 'MOV',
+        instruction = {
+          kind: 'movRegisterMemoryToFromRegister',
           dest,
           source,
-        });
+        };
+
+        index++;
+        break;
+      }
+      // Immediate to register
+      // Layout 1011 wrrr   (r = reg)
+      case 0b1011_0000:
+      case 0b1011_0100:
+      case 0b1011_1000:
+      case 0b1011_1100: {
+        const wBit = (firstByte & 0b0000_1000) === 0b0000_1000 ? 1 : 0;
+        const dest = regTable[((firstByte & 0b0000_0111) << 1) | wBit];
+
+        index++;
+
+        let data: number;
+        if (wBit === 0) {
+          data = instructionBytes[index];
+        } else {
+          index++;
+
+          data = instructionBytes[index - 1] + (instructionBytes[index] << 8);
+        }
+
+        instruction = {
+          kind: 'movImmediateToRegister',
+          dest,
+          data,
+        };
 
         index++;
         break;
       }
       default:
-        instructions.push({ kind: 'UNKNOWN' });
+        instruction = { kind: 'UNKNOWN' };
         index++;
     }
+
+    instructions.push(instruction);
   }
 
   return instructions;
@@ -240,7 +275,6 @@ function decodeModRegRm(byte: number, wBit: number): RegRm {
   // reg bits are index 2, 3, 4. Shift them over 2 and & them with the wBit (last) to get a number in the range 0..16,
   // which is effectively 4-9
   const regTableLookup = ((byte & 0b0011_1000) >> 2) | wBit;
-  console.log(regTableLookup);
   const reg = regTable[regTableLookup];
 
   if (isRegisterToRegister) {

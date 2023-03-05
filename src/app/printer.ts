@@ -9,13 +9,16 @@ export function printDecodedInstructions(instructions: ReadonlyArray<DecodedInst
 
   for (const instruction of instructions) {
     switch (instruction.kind) {
-      case 'ADD':
-        instructionStrings[index] = 'UNKNOWN';
-        break;
-      case 'MOV':
+      case 'movRegisterMemoryToFromRegister':
         instructionStrings[index] = `mov ${printRm(instruction.dest)}, ${printRm(
           instruction.source,
         )}`;
+        break;
+      case 'movImmediateToRegisterMemory':
+        instructionStrings[index] = `movImmediateToRegisterMemory TODO`;
+        break;
+      case 'movImmediateToRegister':
+        instructionStrings[index] = `mov ${instruction.dest.register} ${instruction.data}`;
         break;
       case 'UNKNOWN':
         instructionStrings[index] = `UNKNOWN`;
