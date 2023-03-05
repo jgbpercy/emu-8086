@@ -1,4 +1,4 @@
-import { DecodedInstruction } from './decoder';
+import { DecodedInstruction, SourceOrDestination } from './decoder';
 
 export function printDecodedInstructions(instructions: ReadonlyArray<DecodedInstruction>): string {
   const instructionStrings = new Array<string>(instructions.length + 1);
@@ -13,7 +13,9 @@ export function printDecodedInstructions(instructions: ReadonlyArray<DecodedInst
         instructionStrings[index] = 'UNKNOWN';
         break;
       case 'MOV':
-        instructionStrings[index] = `mov ${instruction.dest}, ${instruction.source}`;
+        instructionStrings[index] = `mov ${printRm(instruction.dest)}, ${printRm(
+          instruction.source,
+        )}`;
         break;
       case 'UNKNOWN':
         instructionStrings[index] = `UNKNOWN`;
@@ -23,4 +25,16 @@ export function printDecodedInstructions(instructions: ReadonlyArray<DecodedInst
   }
 
   return instructionStrings.join('\n');
+}
+
+function printRm(rm: SourceOrDestination): string {
+  if (rm.kind === 'reg') {
+    return rm.register;
+  } else {
+    if (rm.displacement !== null && rm.displacement !== 0) {
+      return `[${rm.text} + ${rm.displacement}]`;
+    } else {
+      return `[${rm.text}]`;
+    }
+  }
 }
