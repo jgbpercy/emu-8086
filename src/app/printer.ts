@@ -32,7 +32,11 @@ function printRm(rm: SourceOrDestination): string {
     return rm.register;
   } else {
     if (rm.displacement !== null && rm.displacement !== 0) {
-      return `[${rm.text} + ${rm.displacement}]`;
+      if (rm.text === 'DIRECT ADDRESS') {
+        return `[${rm.displacement}]`;
+      } else {
+        return `[${rm.text} + ${rm.displacement}]`;
+      }
     } else {
       return `[${rm.text}]`;
     }
