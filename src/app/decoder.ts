@@ -67,33 +67,33 @@ export function decodeInstructions(
 }
 
 type Reg =
-  | 'AL'
-  | 'BL'
-  | 'CL'
-  | 'DL'
-  | 'AH'
-  | 'BH'
-  | 'CH'
-  | 'DH'
-  | 'AX'
-  | 'BX'
-  | 'CX'
-  | 'DX'
-  | 'SP'
-  | 'BP'
-  | 'SI'
-  | 'DI';
+  | 'al'
+  | 'bl'
+  | 'cl'
+  | 'dl'
+  | 'ah'
+  | 'bh'
+  | 'ch'
+  | 'dh'
+  | 'ax'
+  | 'bx'
+  | 'cx'
+  | 'dx'
+  | 'sp'
+  | 'bp'
+  | 'si'
+  | 'di';
 
 type EffectiveAddressCalculation =
-  | 'BX + SI'
-  | 'BX + DI'
-  | 'BP + SI'
-  | 'BP + DI'
-  | 'SI'
-  | 'DI'
-  | 'DIRECT ADDRESS'
-  | 'BX'
-  | 'BP';
+  | { text: 'bx + si' }
+  | { text: 'bx + di' }
+  | { text: 'bp + si' }
+  | { text: 'bp + di' }
+  | { text: 'si' }
+  | { text: 'di' }
+  | { text: 'DIRECT ADDRESS' }
+  | { text: 'bx' }
+  | { text: 'bp' };
 
 type Displacement = 'register' | 0 | 8 | 16;
 
@@ -103,89 +103,90 @@ type RegRm = [Reg, Rm, Displacement];
 
 const regTable: ReadonlyArray<Reg> = [
   // reg 000 w 0
-  'AL',
+  'al',
   // reg 000 w 1
-  'AX',
+  'ax',
   // reg 001 w 0
-  'CL',
+  'cl',
   // reg 001 w 1
-  'CX',
+  'cx',
   // reg 010 w 0
-  'DL',
+  'dl',
   // reg 010 w 1
-  'DX',
+  'dx',
   // reg 011 w 0
-  'BL',
+  'bl',
   // reg 011 w 1
-  'BX',
+  'bx',
   // reg 100 w 0
-  'AH',
+  'ah',
   // reg 100 w 1
-  'SP',
+  'sp',
   // reg 101 w 0
-  'CH',
+  'ch',
   // reg 101 w 1
-  'BP',
+  'bp',
   // reg 110 w 0
-  'DH',
+  'dh',
   // reg 110 w 1
-  'SI',
+  'si',
   // reg 111 w 0
-  'BH',
+  'bh',
   // reg 111 w 1
-  'DI',
+  'di',
 ];
 
-const effectiveAddressTable: Readonly<Record<number, [Rm, Displacement]>> = {
-  // mod 00, rm 000
-  [0b0000_0000]: ['BX + SI', 0],
-  // mod 00, rm 001
-  [0b0000_0001]: ['BX + DI', 0],
-  // mod 00, rm 010
-  [0b0000_0010]: ['BP + SI', 0],
-  // mod 00, rm 011
-  [0b0000_0011]: ['BP + DI', 0],
-  // mod 00, rm 100
-  [0b0000_0100]: ['SI', 0],
-  // mod 00, rm 101
-  [0b0000_0101]: ['DI', 0],
-  // mod 00, rm 110
-  [0b0000_0110]: ['DIRECT ADDRESS', 0],
-  // mod 00, rm 111
-  [0b0000_0111]: ['BX', 0],
-  // mod 01, rm 000
-  [0b0100_0000]: ['BX + SI', 8],
-  // mod 01, rm 001
-  [0b0100_0001]: ['BX + DI', 8],
-  // mod 01, rm 010
-  [0b0100_0010]: ['BP + SI', 8],
-  // mod 01, rm 011
-  [0b0100_0011]: ['BP + DI', 8],
-  // mod 01, rm 100
-  [0b0100_0100]: ['SI', 8],
-  // mod 01, rm 101
-  [0b0100_0101]: ['DI', 8],
-  // mod 01, rm 110
-  [0b0100_0110]: ['BP', 8],
-  // mod 01, rm 111
-  [0b0100_0111]: ['DX', 8],
-  // mod 10, rm 000
-  [0b1000_0000]: ['BX + SI', 16],
-  // mod 10, rm 001
-  [0b1000_0001]: ['BX + DI', 16],
-  // mod 10, rm 010
-  [0b1000_0010]: ['BP + SI', 16],
-  // mod 10, rm 011
-  [0b1000_0011]: ['BP + DI', 16],
-  // mod 10, rm 100
-  [0b1000_0100]: ['SI', 16],
-  // mod 10, rm 101
-  [0b1000_0101]: ['DI', 16],
-  // mod 10, rm 110
-  [0b1000_0110]: ['BP', 16],
-  // mod 10, rm 111
-  [0b1000_0111]: ['BX', 16],
-};
+const effectiveAddressTable: Readonly<Record<number, [EffectiveAddressCalculation, Displacement]>> =
+  {
+    // mod 00, rm 000
+    [0b0000_0000]: [{ text: 'bx + si' }, 0],
+    // mod 00, rm 001
+    [0b0000_0001]: [{ text: 'bx + di' }, 0],
+    // mod 00, rm 010
+    [0b0000_0010]: [{ text: 'bp + si' }, 0],
+    // mod 00, rm 011
+    [0b0000_0011]: [{ text: 'bp + di' }, 0],
+    // mod 00, rm 100
+    [0b0000_0100]: [{ text: 'si' }, 0],
+    // mod 00, rm 101
+    [0b0000_0101]: [{ text: 'di' }, 0],
+    // mod 00, rm 110
+    [0b0000_0110]: [{ text: 'DIRECT ADDRESS' }, 0],
+    // mod 00, rm 111
+    [0b0000_0111]: [{ text: 'bx' }, 0],
+    // mod 01, rm 000
+    [0b0100_0000]: [{ text: 'bx + si' }, 8],
+    // mod 01, rm 001
+    [0b0100_0001]: [{ text: 'bx + di' }, 8],
+    // mod 01, rm 010
+    [0b0100_0010]: [{ text: 'bp + si' }, 8],
+    // mod 01, rm 011
+    [0b0100_0011]: [{ text: 'bp + di' }, 8],
+    // mod 01, rm 100
+    [0b0100_0100]: [{ text: 'si' }, 8],
+    // mod 01, rm 101
+    [0b0100_0101]: [{ text: 'di' }, 8],
+    // mod 01, rm 110
+    [0b0100_0110]: [{ text: 'bp' }, 8],
+    // mod 01, rm 111
+    [0b0100_0111]: [{ text: 'bx' }, 8],
+    // mod 10, rm 000
+    [0b1000_0000]: [{ text: 'bx + si' }, 16],
+    // mod 10, rm 001
+    [0b1000_0001]: [{ text: 'bx + di' }, 16],
+    // mod 10, rm 010
+    [0b1000_0010]: [{ text: 'bp + si' }, 16],
+    // mod 10, rm 011
+    [0b1000_0011]: [{ text: 'bp + di' }, 16],
+    // mod 10, rm 100
+    [0b1000_0100]: [{ text: 'si' }, 16],
+    // mod 10, rm 101
+    [0b1000_0101]: [{ text: 'di' }, 16],
+    // mod 10, rm 110
+    [0b1000_0110]: [{ text: 'bp' }, 16],
+    // mod 10, rm 111
+    [0b1000_0111]: [{ text: 'bx' }, 16],
+  };
 
 // mod/reg/rm byte has structure | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
 //                               |  mod  |    reg    |     rm    |

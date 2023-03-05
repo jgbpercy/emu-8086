@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
 import { decodeInstructions } from './decoder';
+import { printDecodedInstructions } from './printer';
 
 @Component({
   selector: 'app-root',
@@ -10,6 +11,8 @@ import { decodeInstructions } from './decoder';
   styleUrls: ['./app.component.scss'],
 })
 export class AppComponent {
+  instructionString = '';
+
   gotFile(evt: Event): void {
     console.log(evt);
 
@@ -22,7 +25,10 @@ export class AppComponent {
         console.log(typeof loadEvt.target?.result);
 
         if (loadEvt.target?.result instanceof ArrayBuffer) {
-          console.log(decodeInstructions(new Uint8Array(loadEvt.target?.result)));
+          const decodedInstructions = decodeInstructions(new Uint8Array(loadEvt.target?.result));
+
+          console.log(decodedInstructions);
+          this.instructionString = printDecodedInstructions(decodedInstructions);
         }
       });
 
