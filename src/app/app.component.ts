@@ -25,14 +25,16 @@ export class AppComponent {
         console.log(typeof loadEvt.target?.result);
 
         if (loadEvt.target?.result instanceof ArrayBuffer) {
-          const decodedInstructions = decodeInstructions(new Uint8Array(loadEvt.target?.result));
+          const decodedInstructions = decodeInstructions(new Uint8Array(loadEvt.target.result));
 
           console.log(decodedInstructions);
           this.instructionString = printDecodedInstructions(decodedInstructions);
         }
       });
 
-      reader.readAsArrayBuffer(evt.target.files![0]);
+      if (evt.target.files !== null) {
+        reader.readAsArrayBuffer(evt.target.files[0]);
+      }
     }
   }
 }
