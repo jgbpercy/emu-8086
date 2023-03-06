@@ -8,21 +8,46 @@ export function printDecodedInstructions(instructions: ReadonlyArray<DecodedInst
   let index = 1;
 
   for (const instruction of instructions) {
+    let instructionString: string;
+
     switch (instruction.kind) {
-      case 'movRegisterMemoryToFromRegister':
-        instructionStrings[index] = `mov ${printRm(instruction.dest)}, ${printRm(
-          instruction.source,
-        )}`;
+      case 'movRegisterMemoryToFromRegister': {
+        const destString = printRm(instruction.dest);
+        const sourceString = printRm(instruction.source);
+
+        instructionString = `mov ${destString}, ${sourceString}`;
+
         break;
-      case 'movImmediateToRegisterMemory':
-        instructionStrings[index] = `movImmediateToRegisterMemory TODO`;
+      }
+
+      case 'movMemoryToFromAccumulator': {
+        const destString = printRm(instruction.dest);
+        const sourceString = printRm(instruction.source);
+
+        instructionString = `mov ${destString}, ${sourceString}`;
+
         break;
+      }
+
       case 'movImmediateToRegister':
-        instructionStrings[index] = `mov ${instruction.dest.register} ${instruction.data}`;
+        instructionString = `mov ${instruction.dest.register}, ${instruction.data}`;
+
         break;
+
+      case 'movImmediateToRegisterMemory': {
+        const destString = printRm(instruction.dest);
+        const dataString = printDataWithSize(instruction.data);
+
+        instructionString = `mov ${destString}, ${dataString}`;
+
+        break;
+      }
+
       case 'UNKNOWN':
-        instructionStrings[index] = `UNKNOWN`;
+        instructionString = `UNKNOWN`;
     }
+
+    instructionStrings[index] = instructionString;
 
     index++;
   }
@@ -38,10 +63,23 @@ function printRm(rm: SourceOrDestination): string {
       if (rm.text === 'DIRECT ADDRESS') {
         return `[${rm.displacement}]`;
       } else {
-        return `[${rm.text} + ${rm.displacement}]`;
+        return `[${rm.text} ${printSignedAsOperation(rm.displacement)}]`;
       }
     } else {
       return `[${rm.text}]`;
     }
   }
+}
+
+function printSignedAsOperation(val: number): string {
+  if (val >= 0) {
+    return `+ ${val}`;
+  } else {
+    return `- ${Math.abs(val)}`;
+  }
+}
+
+function printDataWithSize(val: number): string {
+  const sizeLabel = val > 255 ? 'word' : 'byte';
+  return `${sizeLabel} ${val}`;
 }

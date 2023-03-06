@@ -24,6 +24,18 @@ export interface MovImmediateToRegisterInstruction {
   readonly data: number;
 }
 
+export interface MovMemoryToFromAccumulator {
+  readonly kind: 'movMemoryToFromAccumulator';
+  readonly dest:
+    | typeof axReg
+    | typeof alReg
+    | { kind: 'mem'; text: 'DIRECT ADDRESS'; displacement: number };
+  readonly source:
+    | typeof axReg
+    | typeof alReg
+    | { kind: 'mem'; text: 'DIRECT ADDRESS'; displacement: number };
+}
+
 export interface UnknownInstruction {
   readonly kind: 'UNKNOWN';
 }
@@ -32,109 +44,8 @@ export type DecodedInstruction =
   | MovRegisterMemoryToFromRegister
   | MovImmediateToRegisterMemoryInstruction
   | MovImmediateToRegisterInstruction
+  | MovMemoryToFromAccumulator
   | UnknownInstruction;
-
-export function decodeInstructions(
-  instructionBytes: Uint8Array,
-): ReadonlyArray<DecodedInstruction> {
-  const instructions: DecodedInstruction[] = [];
-  let index = 0;
-
-  while (index < instructionBytes.length) {
-    const firstByte = instructionBytes[index];
-    const firstSixBits = firstByte & 0b1111_1100;
-
-    let instruction: DecodedInstruction;
-
-    switch (firstSixBits) {
-      // Register/memory to/from register
-      // Layout 1000 10dw
-      case 0b1000_1000: {
-        const dBit = firstByte & 0b0000_0010;
-        const wBit = firstByte & 0b0000_0001;
-
-        index++;
-
-        const [reg, rm] = decodeModRegRm(instructionBytes[index], wBit);
-
-        const destRm = dBit ? reg : rm;
-        const sourceRm = dBit ? rm : reg;
-
-        let dest: SourceOrDestination;
-        let source: SourceOrDestination;
-
-        if (destRm.kind === 'eac') {
-          assertIsRegister(sourceRm);
-          source = sourceRm;
-
-          dest = getEffectiveAddressCalculation(destRm, [
-            instructionBytes[index + 1],
-            instructionBytes[index + 2],
-          ]);
-
-          index += destRm.displacementBytes;
-        } else if (sourceRm.kind === 'eac') {
-          dest = destRm;
-
-          source = getEffectiveAddressCalculation(sourceRm, [
-            instructionBytes[index + 1],
-            instructionBytes[index + 2],
-          ]);
-
-          index += sourceRm.displacementBytes;
-        } else {
-          dest = destRm;
-          source = sourceRm;
-        }
-
-        instruction = {
-          kind: 'movRegisterMemoryToFromRegister',
-          dest,
-          source,
-        };
-
-        index++;
-        break;
-      }
-      // Immediate to register
-      // Layout 1011 wrrr   (r = reg)
-      case 0b1011_0000:
-      case 0b1011_0100:
-      case 0b1011_1000:
-      case 0b1011_1100: {
-        const wBit = (firstByte & 0b0000_1000) === 0b0000_1000 ? 1 : 0;
-        const dest = regTable[((firstByte & 0b0000_0111) << 1) | wBit];
-
-        index++;
-
-        let data: number;
-        if (wBit === 0) {
-          data = instructionBytes[index];
-        } else {
-          index++;
-
-          data = instructionBytes[index - 1] + (instructionBytes[index] << 8);
-        }
-
-        instruction = {
-          kind: 'movImmediateToRegister',
-          dest,
-          data,
-        };
-
-        index++;
-        break;
-      }
-      default:
-        instruction = { kind: 'UNKNOWN' };
-        index++;
-    }
-
-    instructions.push(instruction);
-  }
-
-  return instructions;
-}
 
 type _Register =
   | 'al'
@@ -176,40 +87,57 @@ export type Rm = Register | EffectiveAddressCalculationCategory;
 
 type RegRm = [Register, Rm];
 
+const alReg = { kind: 'reg', register: 'al' } as const;
+const axReg = { kind: 'reg', register: 'ax' } as const;
+const clReg = { kind: 'reg', register: 'cl' } as const;
+const cxReg = { kind: 'reg', register: 'cx' } as const;
+const dlReg = { kind: 'reg', register: 'dl' } as const;
+const dxReg = { kind: 'reg', register: 'dx' } as const;
+const blReg = { kind: 'reg', register: 'bl' } as const;
+const bxReg = { kind: 'reg', register: 'bx' } as const;
+const ahReg = { kind: 'reg', register: 'ah' } as const;
+const spReg = { kind: 'reg', register: 'sp' } as const;
+const chReg = { kind: 'reg', register: 'ch' } as const;
+const bpReg = { kind: 'reg', register: 'bp' } as const;
+const dhReg = { kind: 'reg', register: 'dh' } as const;
+const siReg = { kind: 'reg', register: 'si' } as const;
+const bhReg = { kind: 'reg', register: 'bh' } as const;
+const diReg = { kind: 'reg', register: 'di' } as const;
+
 // table 4-9
 const regTable: ReadonlyArray<Register> = [
   // reg 000 w 0
-  { kind: 'reg', register: 'al' },
+  alReg,
   // reg 000 w 1
-  { kind: 'reg', register: 'ax' },
+  axReg,
   // reg 001 w 0
-  { kind: 'reg', register: 'cl' },
+  clReg,
   // reg 001 w 1
-  { kind: 'reg', register: 'cx' },
+  cxReg,
   // reg 010 w 0
-  { kind: 'reg', register: 'dl' },
+  dlReg,
   // reg 010 w 1
-  { kind: 'reg', register: 'dx' },
+  dxReg,
   // reg 011 w 0
-  { kind: 'reg', register: 'bl' },
+  blReg,
   // reg 011 w 1
-  { kind: 'reg', register: 'bx' },
+  bxReg,
   // reg 100 w 0
-  { kind: 'reg', register: 'ah' },
+  ahReg,
   // reg 100 w 1
-  { kind: 'reg', register: 'sp' },
+  spReg,
   // reg 101 w 0
-  { kind: 'reg', register: 'ch' },
+  chReg,
   // reg 101 w 1
-  { kind: 'reg', register: 'bp' },
+  bpReg,
   // reg 110 w 0
-  { kind: 'reg', register: 'dh' },
+  dhReg,
   // reg 110 w 1
-  { kind: 'reg', register: 'si' },
+  siReg,
   // reg 111 w 0
-  { kind: 'reg', register: 'bh' },
+  bhReg,
   // reg 111 w 1
-  { kind: 'reg', register: 'di' },
+  diReg,
 ];
 
 // table 4-10
@@ -264,11 +192,172 @@ const effectiveAddressTable: Readonly<Record<number, EffectiveAddressCalculation
   [0b1000_0111]: { kind: 'eac', text: 'bx', displacementBytes: 2 },
 };
 
+interface IndexRef {
+  index: number;
+}
+
+type InstructionBytes = Uint8Array;
+
+export function decodeInstructions(
+  instructionBytes: InstructionBytes,
+): ReadonlyArray<DecodedInstruction> {
+  const instructions: DecodedInstruction[] = [];
+  const indexRef = { index: 0 };
+
+  while (indexRef.index < instructionBytes.length) {
+    const firstByte = instructionBytes[indexRef.index];
+    const firstSixBits = firstByte & 0b1111_1100;
+
+    let instruction: DecodedInstruction;
+
+    switch (firstSixBits) {
+      // 88 - 8B
+      // Register/memory to/from register
+      // Layout 1000 10dw
+      case 0b1000_1000: {
+        const dBit = firstByte & 0b0000_0010;
+        const wBit = firstByte & 0b0000_0001;
+
+        const [reg, rm] = decodeModRegRm(instructionBytes, indexRef, wBit);
+
+        const destRm = dBit ? reg : rm;
+        const sourceRm = dBit ? rm : reg;
+
+        let dest: SourceOrDestination;
+        let source: SourceOrDestination;
+
+        if (destRm.kind === 'eac') {
+          assertIsRegister(sourceRm);
+          source = sourceRm;
+
+          dest = getEffectiveAddressCalculation(instructionBytes, indexRef, destRm);
+        } else if (sourceRm.kind === 'eac') {
+          dest = destRm;
+
+          source = getEffectiveAddressCalculation(instructionBytes, indexRef, sourceRm);
+        } else {
+          dest = destRm;
+          source = sourceRm;
+        }
+
+        instruction = {
+          kind: 'movRegisterMemoryToFromRegister',
+          dest,
+          source,
+        };
+
+        break;
+      }
+
+      // A0 - A3
+      // Memory to/from accumulator
+      // Layout 101000dw   except d is backwards from it's normal meaning lol
+      case 0b1010_0000: {
+        const isAccToMem = (firstByte & 0b0000_0010) === 0b0000_0010;
+        const wBit = (firstByte & 0b0000_0001) === 0b0000_0001;
+
+        const reg = wBit ? axReg : alReg;
+
+        const displacement = getIntLiteralData(instructionBytes, indexRef, 1);
+
+        const memoryAddressCalculation = {
+          kind: 'mem',
+          text: 'DIRECT ADDRESS',
+          displacement,
+        } satisfies EffectiveAddressCalculation;
+
+        instruction = {
+          kind: 'movMemoryToFromAccumulator',
+          dest: isAccToMem ? memoryAddressCalculation : reg,
+          source: isAccToMem ? reg : memoryAddressCalculation,
+        };
+
+        break;
+      }
+
+      // B0 - BF
+      // Immediate to register
+      // Layout 1011 wrrr   (r = reg)
+      case 0b1011_0000:
+      case 0b1011_0100:
+      case 0b1011_1000:
+      case 0b1011_1100: {
+        const wBit = (firstByte & 0b0000_1000) === 0b0000_1000 ? 1 : 0;
+        const dest = regTable[((firstByte & 0b0000_0111) << 1) | wBit];
+
+        const data = getIntLiteralData(instructionBytes, indexRef, wBit);
+
+        instruction = {
+          kind: 'movImmediateToRegister',
+          dest,
+          data,
+        };
+
+        break;
+      }
+
+      // C4 - C7
+      // Immediate to register/memory
+      // Layout 1100 011w
+      // Or LES
+      // Layout 1100 0100
+      // Or LDS
+      // Layout 1100 0101
+      case 0b1100_0100: {
+        if (firstByte === 0b1100_0100) {
+          // LES TODO
+          instruction = { kind: 'UNKNOWN' };
+        } else if (firstByte === 0b1100_0101) {
+          // LDS TODO
+          instruction = { kind: 'UNKNOWN' };
+        } else {
+          const wBit = firstByte & 0b0000_0001;
+
+          const [reg, rm] = decodeModRegRm(instructionBytes, indexRef, wBit);
+
+          if (reg.register !== 'al' && reg.register !== 'ax') {
+            throw new Error(
+              'Encounted immediate move to register memory with non-000 reg in mod reg r/m byte. See table 4-13 C6/C7',
+            );
+          }
+
+          let dest: SourceOrDestination;
+
+          if (rm.kind === 'reg') {
+            dest = rm;
+          } else {
+            dest = getEffectiveAddressCalculation(instructionBytes, indexRef, rm);
+          }
+
+          const data = getIntLiteralData(instructionBytes, indexRef, wBit);
+
+          instruction = { kind: 'movImmediateToRegisterMemory', dest, data };
+        }
+
+        break;
+      }
+      default:
+        instruction = { kind: 'UNKNOWN' };
+    }
+
+    indexRef.index++;
+    instructions.push(instruction);
+  }
+
+  return instructions;
+}
+
 // mod/reg/rm byte has structure | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
 //                               |  mod  |    reg    |     rm    |
 //
 // wBit is in bit index 7
-function decodeModRegRm(byte: number, wBit: number): RegRm {
+function decodeModRegRm(
+  instructionBytes: InstructionBytes,
+  indexRef: IndexRef,
+  wBit: number,
+): RegRm {
+  const byte = instructionBytes[++indexRef.index];
+
   // mod bits are the first two - 11 is register-to-register, else we'll use this in the
   const isRegisterToRegister = (0b1100_0000 & byte) === 0b1100_0000;
 
@@ -299,18 +388,48 @@ function assertIsRegister(rm: Rm): asserts rm is Register {
 // possibleDisplacementBytes could possible be undefined if we're reading the last instruction.
 // But in a valid instruction stream we should never have displacement that reads into those bytes, obv
 function getEffectiveAddressCalculation(
+  instructionBytes: InstructionBytes,
+  indexRef: IndexRef,
   category: EffectiveAddressCalculationCategory,
-  possibleDisplacementBytes: [number, number],
 ): EffectiveAddressCalculation {
   let displacement: number | null;
 
   if (category.displacementBytes === 0) {
     displacement = null;
   } else if (category.displacementBytes === 1) {
-    displacement = possibleDisplacementBytes[0];
+    displacement = getAsTwosComplement(instructionBytes[indexRef.index + 1], 128);
   } else {
-    displacement = possibleDisplacementBytes[0] + (possibleDisplacementBytes[1] << 8);
+    displacement = getAsTwosComplement(
+      instructionBytes[indexRef.index + 1] + (instructionBytes[indexRef.index + 2] << 8),
+      32768,
+    );
   }
 
+  indexRef.index += category.displacementBytes;
+
   return { kind: 'mem', text: category.text, displacement };
+}
+
+function getAsTwosComplement(val: number, max: 128 | 32768): number {
+  if (val < max) {
+    return val;
+  } else {
+    return -2 * max + val;
+  }
+}
+
+function getIntLiteralData(
+  instructionBytes: InstructionBytes,
+  indexRef: IndexRef,
+  wBit: number,
+): number {
+  if (wBit === 0) {
+    indexRef.index++;
+
+    return instructionBytes[indexRef.index];
+  } else {
+    indexRef.index += 2;
+
+    return instructionBytes[indexRef.index - 1] + (instructionBytes[indexRef.index] << 8);
+  }
 }
