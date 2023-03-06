@@ -1,3 +1,5 @@
 <input type="file" (change)="gotFile($event)" />
 
 <pre>{{ instructionString }}</pre>
+
+<button *ngIf="instructionString" type="button" (click)="download()">Download</button>
