@@ -10,7 +10,23 @@ export function printDecodedInstructions(instructions: ReadonlyArray<DecodedInst
   for (const instruction of instructions) {
     let instructionString: string;
 
+    // Order is first appearance in decoder switch (i.e. earliest byte that encodes the instruction)
     switch (instruction.kind) {
+      case 'addRegisterMemoryWithRegisterToEither': {
+        const destString = printRm(instruction.dest);
+        const sourceString = printRm(instruction.source);
+
+        instructionString = `add ${destString}, ${sourceString}`;
+
+        break;
+      }
+
+      case 'addImmediateToAccumulator': {
+        instructionString = `add ${instruction.dest.register}, ${instruction.data}`;
+
+        break;
+      }
+
       case 'movRegisterMemoryToFromRegister': {
         const destString = printRm(instruction.dest);
         const sourceString = printRm(instruction.source);
