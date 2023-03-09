@@ -27,6 +27,18 @@ export function printDecodedInstructions(instructions: ReadonlyArray<DecodedInst
         break;
       }
 
+      case 'pushSegmentRegister': {
+        instructionString = `push ${instruction.register}`;
+
+        break;
+      }
+
+      case 'popSegmentRegister': {
+        instructionString = `pop ${instruction.register}`;
+
+        break;
+      }
+
       case 'movRegisterMemoryToFromRegister': {
         const destString = printRm(instruction.dest);
         const sourceString = printRm(instruction.source);

@@ -6,19 +6,29 @@ export interface EffectiveAddressCalculation {
 
 export type SourceOrDestination = Register | EffectiveAddressCalculation;
 
-export interface AddRegisterMemoryWithRegisterToEither {
+export interface AddRegisterMemoryWithRegisterToEitherInstruction {
   readonly kind: 'addRegisterMemoryWithRegisterToEither';
   readonly dest: SourceOrDestination;
   readonly source: SourceOrDestination;
 }
 
-export interface AddImmediateToAccumulator {
+export interface AddImmediateToAccumulatorInstruction {
   readonly kind: 'addImmediateToAccumulator';
   readonly dest: typeof axReg | typeof alReg;
   readonly data: number;
 }
 
-export interface MovRegisterMemoryToFromRegister {
+export interface PushSegmentRegisterInstruction {
+  readonly kind: 'pushSegmentRegister';
+  readonly register: SegmentRegister;
+}
+
+export interface PopSegmentRegisterInstructions {
+  readonly kind: 'popSegmentRegister';
+  readonly register: SegmentRegister;
+}
+
+export interface MovRegisterMemoryToFromRegisterInstruction {
   readonly kind: 'movRegisterMemoryToFromRegister';
   readonly dest: SourceOrDestination;
   readonly source: SourceOrDestination;
@@ -36,7 +46,7 @@ export interface MovImmediateToRegisterInstruction {
   readonly data: number;
 }
 
-export interface MovMemoryToFromAccumulator {
+export interface MovMemoryToFromAccumulatorInstruction {
   readonly kind: 'movMemoryToFromAccumulator';
   readonly dest:
     | typeof axReg
@@ -53,12 +63,14 @@ export interface UnknownInstruction {
 }
 
 export type DecodedInstruction =
-  | AddRegisterMemoryWithRegisterToEither
-  | AddImmediateToAccumulator
-  | MovRegisterMemoryToFromRegister
+  | AddRegisterMemoryWithRegisterToEitherInstruction
+  | AddImmediateToAccumulatorInstruction
+  | PushSegmentRegisterInstruction
+  | PopSegmentRegisterInstructions
+  | MovRegisterMemoryToFromRegisterInstruction
   | MovImmediateToRegisterMemoryInstruction
   | MovImmediateToRegisterInstruction
-  | MovMemoryToFromAccumulator
+  | MovMemoryToFromAccumulatorInstruction
   | UnknownInstruction;
 
 type _Register =
@@ -94,6 +106,8 @@ type _EffectiveAddressCalculationCategory =
   | { kind: 'eac'; text: 'DIRECT ADDRESS'; displacementBytes: 2 }
   | { kind: 'eac'; text: 'bx'; displacementBytes: 0 | 1 | 2 }
   | { kind: 'eac'; text: 'bp'; displacementBytes: 1 | 2 };
+
+type SegmentRegister = 'es' | 'cs' | 'ss' | 'ds';
 
 type EffectiveAddressCalculationCategory = { kind: 'eac' } & _EffectiveAddressCalculationCategory;
 
@@ -257,6 +271,28 @@ export function decodeInstructions(
           kind: 'addImmediateToAccumulator',
           dest,
           data,
+        };
+
+        break;
+      }
+
+      // 06
+      // push Segment register es
+      case 0b0000_0110: {
+        instruction = {
+          kind: 'pushSegmentRegister',
+          register: 'es',
+        };
+
+        break;
+      }
+
+      // 07
+      // pop Segment register es
+      case 0b0000_0111: {
+        instruction = {
+          kind: 'popSegmentRegister',
+          register: 'es',
         };
 
         break;
