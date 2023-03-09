@@ -14,15 +14,9 @@ export class AppComponent {
   instructionString = '';
 
   gotFile(evt: Event): void {
-    console.log(evt);
-
     if (evt.target instanceof HTMLInputElement) {
-      console.log(evt.target.files);
-
       const reader = new FileReader();
       reader.addEventListener('load', (loadEvt) => {
-        console.log(loadEvt.target?.result);
-
         if (loadEvt.target?.result instanceof ArrayBuffer) {
           const instructionBytes = new Uint8Array(loadEvt.target.result);
           let index = 0;
