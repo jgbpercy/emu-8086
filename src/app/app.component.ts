@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
-import { decodeInstructions } from './decoder';
-import { printDecodedInstructions } from './printer';
+import { decodeInstructions, decodeInstructionsAndByteIndices } from './decoder';
+import { printDecodedInstructions, printDecodedInstructionsWithBytes } from './printer';
 
 @Component({
   selector: 'app-root',
@@ -12,6 +12,8 @@ import { printDecodedInstructions } from './printer';
 })
 export class AppComponent {
   instructionString = '';
+
+  instructionBytes?: Uint8Array;
 
   gotFile(evt: Event): void {
     if (evt.target instanceof HTMLInputElement) {
@@ -30,10 +32,7 @@ export class AppComponent {
             index++;
           }
 
-          const decodedInstructions = decodeInstructions(instructionBytes);
-
-          console.log(decodedInstructions);
-          this.instructionString = printDecodedInstructions(decodedInstructions);
+          this.instructionBytes = instructionBytes;
         }
       });
 
@@ -41,6 +40,34 @@ export class AppComponent {
         reader.readAsArrayBuffer(evt.target.files[0]);
       }
     }
+  }
+
+  decodeAndPrint(): void {
+    if (!this.instructionBytes) {
+      throw Error('No bytes!');
+    }
+
+    const decodedInstructions = decodeInstructions(this.instructionBytes);
+
+    console.log(decodedInstructions);
+    this.instructionString = printDecodedInstructions(decodedInstructions);
+  }
+
+  decodeAndPrintWithBytes(): void {
+    if (!this.instructionBytes) {
+      throw Error('No bytes!');
+    }
+
+    const decodedInstructionsWithByteIndices = decodeInstructionsAndByteIndices(
+      this.instructionBytes,
+    );
+
+    console.log(printDecodedInstructions);
+
+    this.instructionString = printDecodedInstructionsWithBytes(
+      decodedInstructionsWithByteIndices,
+      this.instructionBytes,
+    );
   }
 
   download(): void {

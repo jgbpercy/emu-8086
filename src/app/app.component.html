@@ -1,5 +1,15 @@
 <input type="file" (change)="gotFile($event)" />
 
+<ng-container *ngIf="instructionBytes">
+  <div>
+    <button (click)="decodeAndPrint()">Decode and Print</button>
+  </div>
+
+  <div>
+    <button (click)="decodeAndPrintWithBytes()">Decode and Print With Bytes</button>
+  </div>
+</ng-container>
+
 <pre>{{ instructionString }}</pre>
 
 <button *ngIf="instructionString" type="button" (click)="download()">Download</button>
