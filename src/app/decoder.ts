@@ -1,3 +1,18 @@
+// TODO: consolidate instructions into groups
+// for normal mod/reg/rm instructions, type can be more restricted along these lines:
+
+// type ModRegRmInstruction = {
+//   readonly dest: RegisterOrEac;
+//   readonly source: Register;
+// } | {
+//   readonly dest: Register;
+//   readonly source: RegisterOrEac;
+// }
+
+// But is that actually helpful?
+
+// TODO consolidate thrown Errors/Not Used/Unknown into coherent error handling that outputs what went wrong
+
 export interface AddRegisterMemoryWithRegisterToEitherInstruction {
   readonly kind: 'addRegisterMemoryWithRegisterToEither';
   readonly dest: RegisterOrEac;
@@ -268,22 +283,84 @@ export interface CmpImmediateToRegisterMemoryInstruction {
   readonly data: number;
 }
 
+export interface TestRegisterMemoryAndRegisterInstruction {
+  readonly kind: 'testRegisterMemoryAndRegister';
+  readonly dest: RegisterOrEac;
+  readonly source: RegisterOrEac;
+}
+
+export interface XchgRegisterMemoryWithRegisterInstruction {
+  readonly kind: 'xchgRegisterMemoryWithRegister';
+  readonly dest: RegisterOrEac;
+  readonly source: RegisterOrEac;
+}
+
 export interface MovRegisterMemoryToFromRegisterInstruction {
   readonly kind: 'movRegisterMemoryToFromRegister';
   readonly dest: RegisterOrEac;
   readonly source: RegisterOrEac;
 }
 
-export interface MovImmediateToRegisterMemoryInstruction {
-  readonly kind: 'movImmediateToRegisterMemory';
+export interface MovSegmentRegisterToRegisterMemoryInstruction {
+  readonly kind: 'movSegmentRegisterToRegisterMemory';
   readonly dest: RegisterOrEac;
-  readonly data: number;
+  readonly source: SegmentRegister;
 }
 
-export interface MovImmediateToRegisterInstruction {
-  readonly kind: 'movImmediateToRegister';
+export interface LeaLoadEaToRegisterInstruction {
+  readonly kind: 'leaLoadEaToRegister';
   readonly dest: Register;
-  readonly data: number;
+  readonly source: EffectiveAddressCalculation;
+}
+
+export interface MovRegisterMemoryToSegmentRegisterInstruction {
+  readonly kind: 'movRegisterMemoryToSegmentRegister';
+  readonly dest: SegmentRegister;
+  readonly source: RegisterOrEac;
+}
+
+export interface PopRegisterMemoryInstruction {
+  readonly kind: 'popRegisterMemory';
+  readonly dest: RegisterOrEac;
+}
+
+export interface XchgRegisterWithAccumulatorInstruction {
+  readonly kind: 'xchgRegisterWithAccumulator';
+  readonly source: WordRegister;
+}
+
+export interface CbwConvertByteToWordInstruction {
+  readonly kind: 'cbwConvertByteToWord';
+}
+
+export interface CwdConvertWordToDoubleWordInstruction {
+  readonly kind: 'cwdConvertWordToDoubleWord';
+}
+
+export interface CallDirectIntersegmentInstruction {
+  readonly kind: 'callDirectIntersegment';
+  readonly ip: number;
+  readonly cs: number;
+}
+
+export interface WaitInstruction {
+  readonly kind: 'wait';
+}
+
+export interface PushfPushFlagsInstruction {
+  readonly kind: 'pushfPushFlags';
+}
+
+export interface PopfPopFlagsInstruction {
+  readonly kind: 'popfPopFlags';
+}
+
+export interface SahfStoreAhIntoFlagsInstruction {
+  readonly kind: 'sahfStoreAhIntoFlags';
+}
+
+export interface LahfLoadAhWithFlagsInstruction {
+  readonly kind: 'lahfLoadAhWithFlags';
 }
 
 export interface MovMemoryToFromAccumulatorInstruction {
@@ -294,6 +371,49 @@ export interface MovMemoryToFromAccumulatorInstruction {
   readonly source:
     | AccumulatorRegister
     | { kind: 'mem'; text: 'DIRECT ADDRESS'; displacement: number };
+}
+
+export interface MovsInstruction {
+  readonly kind: 'movs';
+  readonly word: boolean;
+}
+
+export interface CmpsInstruction {
+  readonly kind: 'cmps';
+  readonly word: boolean;
+}
+
+export interface TestImmediateWithAccumulatorInstruction {
+  readonly kind: 'testImmediateWithAccumulator';
+  readonly dest: AccumulatorRegister;
+  readonly data: number;
+}
+
+export interface StosInstruction {
+  readonly kind: 'stos';
+  readonly word: boolean;
+}
+
+export interface LodsInstruction {
+  readonly kind: 'lods';
+  readonly word: boolean;
+}
+
+export interface ScasInstruction {
+  readonly kind: 'scas';
+  readonly word: boolean;
+}
+
+export interface MovImmediateToRegisterInstruction {
+  readonly kind: 'movImmediateToRegister';
+  readonly dest: Register;
+  readonly data: number;
+}
+
+export interface MovImmediateToRegisterMemoryInstruction {
+  readonly kind: 'movImmediateToRegisterMemory';
+  readonly dest: RegisterOrEac;
+  readonly data: number;
 }
 
 export interface UnknownInstruction {
@@ -362,10 +482,31 @@ export type DecodedInstruction =
   | PopRegisterInstruction
   | ShortLabelJumpInstruction
   | StandardArithmeticLogicImmediateToRegisterMemoryInstruction
+  | TestRegisterMemoryAndRegisterInstruction
+  | XchgRegisterMemoryWithRegisterInstruction
   | MovRegisterMemoryToFromRegisterInstruction
-  | MovImmediateToRegisterMemoryInstruction
-  | MovImmediateToRegisterInstruction
+  | MovSegmentRegisterToRegisterMemoryInstruction
+  | LeaLoadEaToRegisterInstruction
+  | MovRegisterMemoryToSegmentRegisterInstruction
+  | PopRegisterMemoryInstruction
+  | XchgRegisterWithAccumulatorInstruction
+  | CbwConvertByteToWordInstruction
+  | CwdConvertWordToDoubleWordInstruction
+  | CallDirectIntersegmentInstruction
+  | WaitInstruction
+  | PushfPushFlagsInstruction
+  | PopfPopFlagsInstruction
+  | SahfStoreAhIntoFlagsInstruction
+  | LahfLoadAhWithFlagsInstruction
   | MovMemoryToFromAccumulatorInstruction
+  | MovsInstruction
+  | CmpsInstruction
+  | TestImmediateWithAccumulatorInstruction
+  | StosInstruction
+  | LodsInstruction
+  | ScasInstruction
+  | MovImmediateToRegisterInstruction
+  | MovImmediateToRegisterMemoryInstruction
   | NotUsedInstruction
   | UnknownInstruction;
 
@@ -611,12 +752,35 @@ const standardArithmeticLogicImmediateToRegisterMemoryInstructionTable: Readonly
   'cmpImmediateToRegisterMemory',
 ];
 
+const segmentRegisterTable: ReadonlyArray<SegmentRegister> = [
+  // 00
+  'es',
+  // 01
+  'cs',
+  // 10
+  'ss',
+  // 11
+  'ds',
+];
+
 interface IndexRef {
   index: number;
 }
 
-interface SegmentOverridePrefixRef {
-  segReg: SegmentRegister | undefined;
+class SegmentOverridePrefixRef {
+  private _segReg?: SegmentRegister;
+
+  set segReg(val: SegmentRegister | undefined) {
+    if (val !== undefined && this._segReg !== undefined) {
+      throw Error('Attempted to set segment register override prefix state when already set!');
+    }
+
+    this._segReg = val;
+  }
+
+  get segReg(): SegmentRegister | undefined {
+    return this._segReg;
+  }
 }
 
 type InstructionBytes = Uint8Array;
@@ -626,7 +790,7 @@ export function decodeInstructions(
 ): ReadonlyArray<DecodedInstruction> {
   const instructions: DecodedInstruction[] = [];
   const indexRef: IndexRef = { index: 0 };
-  const segmentOverridePrefixRef: SegmentOverridePrefixRef = { segReg: undefined };
+  const segmentOverridePrefixRef = new SegmentOverridePrefixRef();
 
   while (indexRef.index < instructionBytes.length) {
     console.log(indexRef.index);
@@ -643,7 +807,7 @@ export function decodeInstructionsAndByteIndices(
 ): ReadonlyArray<DecodedInstructionWithByteIndex> {
   const instructions: DecodedInstructionWithByteIndex[] = [];
   const indexRef: IndexRef = { index: 0 };
-  const segmentOverridePrefixRef: SegmentOverridePrefixRef = { segReg: undefined };
+  const segmentOverridePrefixRef = new SegmentOverridePrefixRef();
 
   while (indexRef.index < instructionBytes.length) {
     instructions.push([
@@ -960,7 +1124,7 @@ function decodeInstruction(
 
     // 26
     // es Segment override prefix
-    // cursed: continue the loop and attach to the next instruction
+    // cursed: recurse (only 1 depth) and attach to the next instruction
     case 0b0010_0110: {
       segmentOverridePrefixRef.segReg = 'es';
 
@@ -1022,7 +1186,7 @@ function decodeInstruction(
 
     // 2e
     // cs Segment override prefix
-    // cursed: continue the loop and attach to the next instruction
+    // cursed: recurse (only 1 depth) and attach to the next instruction
     case 0b0010_1110: {
       segmentOverridePrefixRef.segReg = 'cs';
 
@@ -1084,7 +1248,7 @@ function decodeInstruction(
 
     // 36
     // ss Segment override prefix
-    // cursed: continue the loop and attach to the next instruction
+    // cursed: recurse (only 1 depth) and attach to the next instruction
     case 0b0011_0110: {
       segmentOverridePrefixRef.segReg = 'ss';
 
@@ -1146,7 +1310,7 @@ function decodeInstruction(
 
     // 3e
     // ds Segment override prefix
-    // cursed: continue the loop and attach to the next instruction
+    // cursed: recurse (only 1 depth) and attach to the next instruction
     case 0b0011_1110: {
       segmentOverridePrefixRef.segReg = 'ds';
 
@@ -1328,17 +1492,12 @@ function decodeInstruction(
         break;
       }
 
-      let dest: RegisterOrEac;
-      if (destRm.kind === 'reg') {
-        dest = destRm;
-      } else {
-        dest = decodeEffectiveAddressCalculation(
-          instructionBytes,
-          indexRef,
-          destRm,
-          segmentOverridePrefixRef,
-        );
-      }
+      const dest = decodeRegisterOrEffectiveAddressCalculation(
+        instructionBytes,
+        indexRef,
+        destRm,
+        segmentOverridePrefixRef,
+      );
 
       const wBitForDataDecode = wBit && !sBit ? 1 : 0;
 
@@ -1352,6 +1511,46 @@ function decodeInstruction(
         kind: instructionKind,
         dest,
         data,
+      };
+
+      break;
+    }
+
+    // 84 - 85
+    // test Register/memory and register
+    // Layout 1000 010w
+    case 0b1000_0100:
+    case 0b1000_0101: {
+      const [dest, source] = decodeDestSourceForModRegRmInstruction(
+        instructionBytes,
+        indexRef,
+        segmentOverridePrefixRef,
+      );
+
+      instruction = {
+        kind: 'testRegisterMemoryAndRegister',
+        dest,
+        source,
+      };
+
+      break;
+    }
+
+    // 86 = 87
+    // xchg Register/memory with register
+    // Layout 1000 011w
+    case 0b1000_0110:
+    case 0b1000_0111: {
+      const [dest, source] = decodeDestSourceForModRegRmInstruction(
+        instructionBytes,
+        indexRef,
+        segmentOverridePrefixRef,
+      );
+
+      instruction = {
+        kind: 'xchgRegisterMemoryWithRegister',
+        dest,
+        source,
       };
 
       break;
@@ -1374,6 +1573,234 @@ function decodeInstruction(
         kind: 'movRegisterMemoryToFromRegister',
         dest,
         source,
+      };
+
+      break;
+    }
+
+    // 8c
+    // mov Segment register to register/memory
+    case 0b1000_1100: {
+      const [srBits, destRm] = decodeMiddleThreeBitsAndModRm(instructionBytes, indexRef, 1);
+
+      if (srBits & 0b0010_0000) {
+        throw Error(
+          'Got segment register to register memory instruction where third bit of second byte was set',
+        );
+      }
+
+      const source = segmentRegisterTable[srBits >> 3];
+
+      const dest = decodeRegisterOrEffectiveAddressCalculation(
+        instructionBytes,
+        indexRef,
+        destRm,
+        segmentOverridePrefixRef,
+      );
+
+      instruction = {
+        kind: 'movSegmentRegisterToRegisterMemory',
+        dest,
+        source,
+      };
+
+      break;
+    }
+
+    // 8d
+    // lea Load EA to register
+    case 0b1000_1101: {
+      const [dest, sourceCategory] = decodeModRegRm(instructionBytes, indexRef, 1);
+
+      if (sourceCategory.kind === 'reg') {
+        throw Error(
+          "Got mov register source for lea instruction. Seems like this shouldn't be possible",
+        );
+      }
+
+      const source = decodeEffectiveAddressCalculation(
+        instructionBytes,
+        indexRef,
+        sourceCategory,
+        segmentOverridePrefixRef,
+      );
+
+      instruction = {
+        kind: 'leaLoadEaToRegister',
+        dest,
+        source,
+      };
+
+      break;
+    }
+
+    // 8e
+    // mov Register/memory to segment register
+    case 0b1000_1110: {
+      const [srBits, sourceRm] = decodeMiddleThreeBitsAndModRm(instructionBytes, indexRef, 1);
+
+      if (srBits & 0b0010_0000) {
+        throw Error(
+          'Got mov segment register to register memory instruction where third bit of second byte was set',
+        );
+      }
+
+      const dest = segmentRegisterTable[srBits >> 3];
+
+      const source = decodeRegisterOrEffectiveAddressCalculation(
+        instructionBytes,
+        indexRef,
+        sourceRm,
+        segmentOverridePrefixRef,
+      );
+
+      instruction = {
+        kind: 'movRegisterMemoryToSegmentRegister',
+        dest,
+        source,
+      };
+
+      break;
+    }
+
+    // 8f
+    // pop Register/memory
+    case 0b1000_1111: {
+      const [middleBits, destRm] = decodeMiddleThreeBitsAndModRm(instructionBytes, indexRef, 1);
+
+      if (middleBits !== 0) {
+        throw Error(
+          'Got pop register/memory instruction with non-zero "reg" middle bits in second byte',
+        );
+      }
+
+      const dest = decodeRegisterOrEffectiveAddressCalculation(
+        instructionBytes,
+        indexRef,
+        destRm,
+        segmentOverridePrefixRef,
+      );
+
+      instruction = {
+        kind: 'popRegisterMemory',
+        dest,
+      };
+
+      break;
+    }
+
+    // 90
+    // nop (exchange AX, AX)
+    // Casey's listing doesn't have this so I guess it's effectively no used, but TODO try getting nasm to assemble it
+    case 0b1001_0000: {
+      instruction = {
+        kind: 'NOT USED',
+        byte: firstByte,
+      };
+
+      break;
+    }
+
+    // 91 - 97
+    // xchg Register with accumulator
+    // Layout 1001 0rrr    (r = word register)
+    case 0b1001_0001:
+    case 0b1001_0010:
+    case 0b1001_0011:
+    case 0b1001_0100:
+    case 0b1001_0101:
+    case 0b1001_0110:
+    case 0b1001_0111: {
+      const source = wordRegisterTable[firstByte & 0b0000_0111];
+
+      instruction = {
+        kind: 'xchgRegisterWithAccumulator',
+        source,
+      };
+
+      break;
+    }
+
+    // 98
+    // cbw Convert byte to word
+    case 0b1001_1000: {
+      instruction = {
+        kind: 'cbwConvertByteToWord',
+      };
+
+      break;
+    }
+
+    // 99
+    // cwd Convert word to double word
+    case 0b1001_1001: {
+      instruction = {
+        kind: 'cwdConvertWordToDoubleWord',
+      };
+
+      break;
+    }
+
+    // 9a
+    // call Direct intersegment
+    case 0b1001_1010: {
+      const ip = decodeIntLiteralData(instructionBytes, indexRef, 1);
+      const cs = decodeIntLiteralData(instructionBytes, indexRef, 1);
+
+      instruction = {
+        kind: 'callDirectIntersegment',
+        ip,
+        cs,
+      };
+
+      break;
+    }
+
+    // 9b
+    // wait
+    case 0b1001_1011: {
+      instruction = {
+        kind: 'wait',
+      };
+
+      break;
+    }
+
+    // 9c
+    // pushf Push flags
+    case 0b1001_1100: {
+      instruction = {
+        kind: 'pushfPushFlags',
+      };
+
+      break;
+    }
+
+    // 9d
+    // popf Pop flags
+    case 0b1001_1101: {
+      instruction = {
+        kind: 'popfPopFlags',
+      };
+
+      break;
+    }
+
+    // 9e
+    // sahf Store AH into flags
+    case 0b1001_1110: {
+      instruction = {
+        kind: 'sahfStoreAhIntoFlags',
+      };
+
+      break;
+    }
+
+    // 9f
+    //lahf Load AH with flags
+    case 0b1001_1111: {
+      instruction = {
+        kind: 'lahfLoadAhWithFlags',
       };
 
       break;
@@ -1403,6 +1830,87 @@ function decodeInstruction(
         kind: 'movMemoryToFromAccumulator',
         dest: isAccToMem ? memoryAddressCalculation : reg,
         source: isAccToMem ? reg : memoryAddressCalculation,
+      };
+
+      break;
+    }
+
+    // a4 - a5
+    // movs Move byte/word
+    case 0b1010_0100:
+    case 0b1010_0101: {
+      instruction = {
+        kind: 'movs',
+        word: !!(firstByte & 0b0000_0001),
+      };
+
+      break;
+    }
+
+    // a6 - a7
+    // cmps Compare byte/word
+    case 0b1010_0110:
+    case 0b1010_0111: {
+      instruction = {
+        kind: 'cmps',
+        word: !!(firstByte & 0b0000_0001),
+      };
+
+      break;
+    }
+
+    // a8 - a9
+    // test Immediate data with accumulator
+    // Layout 1010 100w
+    case 0b1010_1000:
+    case 0b1010_1001: {
+      const wBit = firstByte & 0b0000_0001;
+
+      const dest = wBit ? axReg : alReg;
+
+      const data = decodeIntLiteralData(instructionBytes, indexRef, wBit);
+
+      instruction = {
+        kind: 'testImmediateWithAccumulator',
+
+        dest,
+        data,
+      };
+
+      break;
+    }
+
+    // aa - ab
+    // stos Store byte/word from AL/AX
+    case 0b1010_1010:
+    case 0b1010_1011: {
+      instruction = {
+        kind: 'stos',
+        word: !!(firstByte & 0b0000_0001),
+      };
+
+      break;
+    }
+
+    // ac - ad
+    // lods
+    case 0b1010_1100:
+    case 0b1010_1101: {
+      instruction = {
+        kind: 'lods',
+        word: !!(firstByte & 0b0000_0001),
+      };
+
+      break;
+    }
+
+    // ae - af
+    // scas
+    case 0b1010_1110:
+    case 0b1010_1111: {
+      instruction = {
+        kind: 'scas',
+        word: !!(firstByte & 0b0000_0001),
       };
 
       break;
@@ -1441,14 +1949,14 @@ function decodeInstruction(
       break;
     }
 
-    // c4 - c5
+    // c6 - c7
     // mov Immediate to register/memory
     // Layout 1100 011w
     case 0b1100_0110:
     case 0b1100_0111: {
       const wBit = firstByte & 0b0000_0001;
 
-      const [reg, rm] = decodeModRegRm(instructionBytes, indexRef, wBit);
+      const [reg, destRm] = decodeModRegRm(instructionBytes, indexRef, wBit);
 
       if (reg.register !== 'al' && reg.register !== 'ax') {
         throw new Error(
@@ -1456,18 +1964,12 @@ function decodeInstruction(
         );
       }
 
-      let dest: RegisterOrEac;
-
-      if (rm.kind === 'reg') {
-        dest = rm;
-      } else {
-        dest = decodeEffectiveAddressCalculation(
-          instructionBytes,
-          indexRef,
-          rm,
-          segmentOverridePrefixRef,
-        );
-      }
+      const dest = decodeRegisterOrEffectiveAddressCalculation(
+        instructionBytes,
+        indexRef,
+        destRm,
+        segmentOverridePrefixRef,
+      );
 
       const data = decodeIntLiteralData(instructionBytes, indexRef, wBit);
 
@@ -1584,6 +2086,24 @@ function decodeMiddleThreeBitsAndModRm(
 function assertIsRegister(rm: RegisterOrEacCategory): asserts rm is Register {
   if (rm.kind === 'eac') {
     throw new Error(`Expected register, got ${rm.kind} ${rm.text}`);
+  }
+}
+
+function decodeRegisterOrEffectiveAddressCalculation(
+  instructionBytes: InstructionBytes,
+  indexRef: IndexRef,
+  registerOrEacCategory: RegisterOrEacCategory,
+  segmentOverridePrefixRef: SegmentOverridePrefixRef,
+): RegisterOrEac {
+  if (registerOrEacCategory.kind === 'reg') {
+    return registerOrEacCategory;
+  } else {
+    return decodeEffectiveAddressCalculation(
+      instructionBytes,
+      indexRef,
+      registerOrEacCategory,
+      segmentOverridePrefixRef,
+    );
   }
 }
 

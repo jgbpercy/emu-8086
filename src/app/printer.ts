@@ -263,9 +263,102 @@ function printInstruction(instruction: DecodedInstruction): string {
       return printOpDestSizedDataInstruction('cmp', instruction);
     }
 
-    case 'movRegisterMemoryToFromRegister':
+    case 'testRegisterMemoryAndRegister': {
+      return printOpDestSourceInstruction('test', instruction);
+    }
+
+    case 'xchgRegisterMemoryWithRegister': {
+      return printOpDestSourceInstruction('xchg', instruction);
+    }
+
+    case 'movRegisterMemoryToFromRegister': {
+      return printOpDestSourceInstruction('mov', instruction);
+    }
+
+    case 'movSegmentRegisterToRegisterMemory': {
+      const destString = printRegisterOrEac(instruction.dest);
+
+      return `mov ${destString}, ${instruction.source}`;
+    }
+
+    case 'leaLoadEaToRegister': {
+      return printOpDestSourceInstruction('lea', instruction);
+    }
+
+    case 'movRegisterMemoryToSegmentRegister': {
+      const sourceString = printRegisterOrEac(instruction.source);
+
+      return `mov ${instruction.dest}, ${sourceString}`;
+    }
+
+    case 'popRegisterMemory': {
+      const destString = printRegisterOrEacWithSize(instruction.dest, true);
+
+      return `pop ${destString}`;
+    }
+
+    case 'xchgRegisterWithAccumulator': {
+      return `xchg ax, ${instruction.source.register}`;
+    }
+
+    case 'cbwConvertByteToWord': {
+      return 'cbw';
+    }
+
+    case 'cwdConvertWordToDoubleWord': {
+      return 'cwd';
+    }
+
+    case 'callDirectIntersegment': {
+      return `call ${instruction.ip}:${instruction.cs}`;
+    }
+
+    case 'wait': {
+      return 'wait';
+    }
+
+    case 'pushfPushFlags': {
+      return 'pushf';
+    }
+
+    case 'popfPopFlags': {
+      return 'popf';
+    }
+
+    case 'sahfStoreAhIntoFlags': {
+      return 'sahf';
+    }
+
+    case 'lahfLoadAhWithFlags': {
+      return 'lahf';
+    }
+
     case 'movMemoryToFromAccumulator': {
       return printOpDestSourceInstruction('mov', instruction);
+    }
+
+    case 'movs': {
+      return instruction.word ? 'movsw' : 'movsb';
+    }
+
+    case 'cmps': {
+      return instruction.word ? 'cmpsw' : 'cmpsb';
+    }
+
+    case 'testImmediateWithAccumulator': {
+      return ';';
+    }
+
+    case 'stos': {
+      return instruction.word ? 'stosw' : 'stosb';
+    }
+
+    case 'lods': {
+      return instruction.word ? 'lodsw' : 'lodsb';
+    }
+
+    case 'scas': {
+      return instruction.word ? 'scasw' : 'scasb';
     }
 
     case 'movImmediateToRegister': {
@@ -293,6 +386,19 @@ function printOpDestSourceInstruction(
   const sourceString = printRegisterOrEac(instruction.source);
 
   return `${op} ${destString}, ${sourceString}`;
+}
+
+function printRegisterOrEacWithSize(rm: RegisterOrEac, word: boolean): string {
+  const rmString = printRegisterOrEac(rm);
+
+  let sizeString: string;
+  if (rm.kind === 'reg') {
+    sizeString = '';
+  } else {
+    sizeString = word ? 'word' : 'byte';
+  }
+
+  return `${sizeString}${rmString}`;
 }
 
 function printRegisterOrEac(rm: RegisterOrEac): string {
