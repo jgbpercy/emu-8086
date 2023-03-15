@@ -410,10 +410,180 @@ export interface MovImmediateToRegisterInstruction {
   readonly data: number;
 }
 
+export interface RetWithinSegAddingImmedToSpInstruction {
+  readonly kind: 'retWithinSegAddingImmedToSp';
+  readonly data: number;
+}
+
+export interface RetWithinSegmentInstruction {
+  readonly kind: 'retWithinSegment';
+}
+
+export interface LesLoadPointerToEsInstruction {
+  readonly kind: 'lesLoadPointerToEs';
+  readonly dest: WordRegister;
+  readonly source: EffectiveAddressCalculation;
+}
+
+export interface LdsLoadPointerToDsInstruction {
+  readonly kind: 'ldsLoadPointerToDs';
+  readonly dest: WordRegister;
+  readonly source: EffectiveAddressCalculation;
+}
+
 export interface MovImmediateToRegisterMemoryInstruction {
   readonly kind: 'movImmediateToRegisterMemory';
   readonly dest: RegisterOrEac;
   readonly data: number;
+}
+
+export interface RetIntersegmentAddingImmediateToSpInstruction {
+  readonly kind: 'retIntersegmentAddingImmediateToSp';
+  readonly data: number;
+}
+
+export interface RetIntersegmentInstruction {
+  readonly kind: 'retIntersegment';
+}
+
+export interface IntType3Instruction {
+  readonly kind: 'intType3';
+}
+
+export interface IntTypeSpecifiedInstruction {
+  readonly kind: 'intTypeSpecified';
+  readonly data: number;
+}
+
+export interface IntoInterruptOnOverflowInstruction {
+  readonly kind: 'intoInterruptOnOverflow';
+}
+
+export interface IretInterruptReturnInstruction {
+  readonly kind: 'iretInterruptReturn';
+}
+
+export interface RolRotateLeftInstruction {
+  readonly kind: 'rolRotateLeft';
+  readonly dest: RegisterOrEac;
+  readonly source: 1 | typeof clReg;
+}
+
+export interface RorRotateRightInstruction {
+  readonly kind: 'rorRotateRight';
+  readonly dest: RegisterOrEac;
+  readonly source: 1 | typeof clReg;
+}
+
+export interface RclRotateThroughCarryFlagLeftInstruction {
+  readonly kind: 'rclRotateThroughCarryFlagLeft';
+  readonly dest: RegisterOrEac;
+  readonly source: 1 | typeof clReg;
+}
+
+export interface RcrRotateThroughCarryRightInstruction {
+  readonly kind: 'rcrRotateThroughCarryRight';
+  readonly dest: RegisterOrEac;
+  readonly source: 1 | typeof clReg;
+}
+
+export interface SalShiftLogicalArithmeticLeftInstruction {
+  readonly kind: 'salShiftLogicalArithmeticLeft';
+  readonly dest: RegisterOrEac;
+  readonly source: 1 | typeof clReg;
+}
+
+export interface ShrShiftLogicalRightInstruction {
+  readonly kind: 'shrShiftLogicalRight';
+  readonly dest: RegisterOrEac;
+  readonly source: 1 | typeof clReg;
+}
+
+export interface SarShiftArithmeticRightInstruction {
+  readonly kind: 'sarShiftArithmeticRight';
+  readonly dest: RegisterOrEac;
+  readonly source: 1 | typeof clReg;
+}
+
+export interface AamAsciiAdjustForMultipleInstruction {
+  readonly kind: 'aamAsciiAdjustForMultiply';
+}
+
+export interface AadAsciiAdjustForDivideInstruction {
+  readonly kind: 'aadAsciiAdjustForDivide';
+}
+
+export interface XlatTranslateByteToAlInstruction {
+  readonly kind: 'xlatTranslateByteToAl';
+}
+
+export interface EscEscapeToExternalDeviceInstruction {
+  readonly kind: 'escEscapeToExternalDevice';
+  readonly source: RegisterOrEac;
+  readonly data: number;
+}
+
+export interface LoopneLoopWhileNotEqualInstruction {
+  readonly kind: 'loopneLoopWhileNotEqual';
+  readonly signedIncrement: number;
+}
+
+export interface LoopeLoopWhileEqualInstruction {
+  readonly kind: 'loopeLoopWhileEqual';
+  readonly signedIncrement: number;
+}
+
+export interface LoopLoopCxTimesInstruction {
+  readonly kind: 'loopLoopCxTimes';
+  readonly signedIncrement: number;
+}
+
+export interface JcxzJumpOnCxZeroInstruction {
+  readonly kind: 'jcxzJumpOnCxZero';
+  readonly signedIncrement: number;
+}
+
+export interface InFixedPortInstruction {
+  readonly kind: 'inFixedPort';
+  readonly dest: AccumulatorRegister;
+  readonly data: number;
+}
+
+export interface OutFixedPortInstruction {
+  readonly kind: 'outFixedPort';
+  readonly dest: AccumulatorRegister;
+  readonly data: number;
+}
+
+export interface CallDirectWithinSegmentInstruction {
+  readonly kind: 'callDirectWithinSegment';
+  readonly ip: number;
+}
+
+export interface JmpDirectWithinSegmentInstruction {
+  readonly kind: 'jmpDirectWithinSegment';
+  readonly ip: number;
+}
+
+export interface JmpDirectIntersegmentInstruction {
+  readonly kind: 'jmpDirectIntersegment';
+  readonly ip: number;
+  readonly cs: number;
+}
+
+export interface JmpDirectWithinSegmentShortInstruction {
+  readonly kind: 'jmpDirectWithinSegmentShort';
+  readonly ip: number;
+}
+
+export interface InVariablePortInstruction {
+  readonly kind: 'inVariablePort';
+  readonly dest: AccumulatorRegister;
+}
+
+export interface OutVariablePortInstruction {
+  readonly kind: 'outVariablePortInstruction';
+  readonly dest: AccumulatorRegister;
 }
 
 export interface UnknownInstruction {
@@ -452,6 +622,21 @@ type StandardArithmeticLogicImmediateToRegisterMemoryInstruction =
   | SubImmediateToRegisterMemoryInstruction
   | XorImmediateToRegisterMemoryInstruction
   | CmpImmediateToRegisterMemoryInstruction;
+
+type StandardLogicWithOneOrClInstruction =
+  | RolRotateLeftInstruction
+  | RorRotateRightInstruction
+  | RclRotateThroughCarryFlagLeftInstruction
+  | RcrRotateThroughCarryRightInstruction
+  | SalShiftLogicalArithmeticLeftInstruction
+  | ShrShiftLogicalRightInstruction
+  | SarShiftArithmeticRightInstruction;
+
+type LoopOrJumpCxInstuction =
+  | LoopneLoopWhileNotEqualInstruction
+  | LoopeLoopWhileEqualInstruction
+  | LoopLoopCxTimesInstruction
+  | JcxzJumpOnCxZeroInstruction;
 
 export type DecodedInstruction =
   | AddRegisterMemoryWithRegisterToEitherInstruction
@@ -506,7 +691,31 @@ export type DecodedInstruction =
   | LodsInstruction
   | ScasInstruction
   | MovImmediateToRegisterInstruction
+  | RetWithinSegAddingImmedToSpInstruction
+  | RetWithinSegmentInstruction
+  | LesLoadPointerToEsInstruction
+  | LdsLoadPointerToDsInstruction
   | MovImmediateToRegisterMemoryInstruction
+  | RetIntersegmentAddingImmediateToSpInstruction
+  | RetIntersegmentInstruction
+  | IntType3Instruction
+  | IntTypeSpecifiedInstruction
+  | IntoInterruptOnOverflowInstruction
+  | IretInterruptReturnInstruction
+  | StandardLogicWithOneOrClInstruction
+  | AamAsciiAdjustForMultipleInstruction
+  | AadAsciiAdjustForDivideInstruction
+  | XlatTranslateByteToAlInstruction
+  | EscEscapeToExternalDeviceInstruction
+  | LoopOrJumpCxInstuction
+  | InFixedPortInstruction
+  | OutFixedPortInstruction
+  | CallDirectWithinSegmentInstruction
+  | JmpDirectWithinSegmentInstruction
+  | JmpDirectIntersegmentInstruction
+  | JmpDirectWithinSegmentShortInstruction
+  | OutVariablePortInstruction
+  | InVariablePortInstruction
   | NotUsedInstruction
   | UnknownInstruction;
 
@@ -761,6 +970,38 @@ const segmentRegisterTable: ReadonlyArray<SegmentRegister> = [
   'ss',
   // 11
   'ds',
+];
+
+const standardLogicWithOneOrClInstructionTable: ReadonlyArray<
+  StandardLogicWithOneOrClInstruction['kind'] | NotUsedInstruction['kind']
+> = [
+  // 000
+  'rolRotateLeft',
+  // 001
+  'rorRotateRight',
+  // 010
+  'rclRotateThroughCarryFlagLeft',
+  // 011
+  'rcrRotateThroughCarryRight',
+  // 100
+  'salShiftLogicalArithmeticLeft',
+  // 101
+  'shrShiftLogicalRight',
+  // 110
+  'NOT USED',
+  // 111
+  'sarShiftArithmeticRight',
+];
+
+const loopOrJumpCxInstructionTable: ReadonlyArray<LoopOrJumpCxInstuction['kind']> = [
+  // 00
+  'loopneLoopWhileNotEqual',
+  // 01
+  'loopeLoopWhileEqual',
+  // 10
+  'loopLoopCxTimes',
+  // 11
+  'jcxzJumpOnCxZero',
 ];
 
 interface IndexRef {
@@ -1949,6 +2190,74 @@ function decodeInstruction(
       break;
     }
 
+    // c0 - c1
+    // NOT USED
+    case 0b1100_0000:
+    case 0b1100_0001: {
+      instruction = {
+        kind: 'NOT USED',
+        byte: firstByte,
+      };
+
+      break;
+    }
+
+    // c2
+    // ret Within seg adding immed to SP
+    case 0b1100_0010: {
+      const data = decodeIntLiteralData(instructionBytes, indexRef, 1);
+
+      instruction = {
+        kind: 'retWithinSegAddingImmedToSp',
+        data,
+      };
+
+      break;
+    }
+
+    // c3
+    // ret Within seg
+    case 0b1100_0011: {
+      instruction = {
+        kind: 'retWithinSegment',
+      };
+
+      break;
+    }
+
+    // c4 - c5
+    // les Load pointer to ES
+    // lds load pointer to DS
+    case 0b1100_0100:
+    case 0b1100_0101: {
+      const [regBits, sourceEacCategory] = decodeMiddleThreeBitsAndModRm(
+        instructionBytes,
+        indexRef,
+        1,
+      );
+
+      if (sourceEacCategory.kind === 'reg') {
+        throw Error("les instruction got register source. Don't think this is allowed.");
+      }
+
+      const dest = wordRegisterTable[regBits >> 3];
+
+      const source = decodeEffectiveAddressCalculation(
+        instructionBytes,
+        indexRef,
+        sourceEacCategory,
+        segmentOverridePrefixRef,
+      );
+
+      instruction = {
+        kind: 0b0000_0001 & firstByte ? 'ldsLoadPointerToDs' : 'lesLoadPointerToEs',
+        dest,
+        source,
+      };
+
+      break;
+    }
+
     // c6 - c7
     // mov Immediate to register/memory
     // Layout 1100 011w
@@ -1977,6 +2286,332 @@ function decodeInstruction(
 
       break;
     }
+
+    // c8 - c9
+    // NOT USED
+    case 0b1100_1000:
+    case 0b1100_1001: {
+      instruction = {
+        kind: 'NOT USED',
+        byte: firstByte,
+      };
+
+      break;
+    }
+
+    // ca
+    // ret Intersegment adding immediate to SP
+    case 0b1100_1010: {
+      const data = decodeIntLiteralData(instructionBytes, indexRef, 1);
+
+      instruction = {
+        kind: 'retIntersegmentAddingImmediateToSp',
+        data,
+      };
+
+      break;
+    }
+
+    // cb
+    // ret Intersegment
+    case 0b1100_1011: {
+      instruction = {
+        kind: 'retIntersegment',
+      };
+
+      break;
+    }
+
+    // cc
+    // int Type 3
+    case 0b1100_1100: {
+      instruction = {
+        kind: 'intType3',
+      };
+
+      break;
+    }
+
+    // cd
+    // int Type specified
+    case 0b1100_1101: {
+      const data = decodeIntLiteralData(instructionBytes, indexRef, 0);
+
+      instruction = {
+        kind: 'intTypeSpecified',
+        data,
+      };
+
+      break;
+    }
+
+    // ce
+    // into Interrupt on overflow
+    case 0b1100_1110: {
+      instruction = {
+        kind: 'intoInterruptOnOverflow',
+      };
+
+      break;
+    }
+
+    // cf
+    // iret Interrupt return
+    case 0b1100_1111: {
+      instruction = {
+        kind: 'iretInterruptReturn',
+      };
+
+      break;
+    }
+
+    // d0 - d3
+    // Standard logic with 1 or register cl instructions (rol, ror, rcl, rcr, sal, shr, sar)
+    // Layout 1101 00vw
+    case 0b1101_0000:
+    case 0b1101_0001:
+    case 0b1101_0010:
+    case 0b1101_0011: {
+      const wBit = firstByte & 0b0000_0001;
+      const vBit = firstByte & 0b0000_0010;
+
+      const [opCodeBits, destRm] = decodeMiddleThreeBitsAndModRm(instructionBytes, indexRef, wBit);
+
+      const instructionKind = standardLogicWithOneOrClInstructionTable[opCodeBits >> 3];
+
+      if (instructionKind === 'NOT USED') {
+        throw Error(
+          'Got "logic with 1 or cl" instruction with 110 "reg" middle bits in second byte',
+        );
+      }
+
+      const dest = decodeRegisterOrEffectiveAddressCalculation(
+        instructionBytes,
+        indexRef,
+        destRm,
+        segmentOverridePrefixRef,
+      );
+
+      const source: StandardLogicWithOneOrClInstruction['source'] = vBit ? clReg : 1;
+
+      const _instruction: StandardLogicWithOneOrClInstruction = {
+        kind: instructionKind,
+        dest,
+        source,
+      };
+
+      instruction = _instruction;
+
+      break;
+    }
+
+    // d4
+    // aam ASCII adjust for multiply
+    case 0b1101_0100: {
+      instruction = {
+        kind: 'aamAsciiAdjustForMultiply',
+      };
+
+      // These guys have an extra byte that is always 0000 1010 because why not lol
+      indexRef.index++;
+
+      break;
+    }
+
+    // d5
+    // aad ASCII adjust for divide
+    case 0b1101_0101: {
+      instruction = {
+        kind: 'aadAsciiAdjustForDivide',
+      };
+
+      // These guys have an extra byte that is always 0000 1010 because why not lol
+      indexRef.index++;
+
+      break;
+    }
+
+    // d6
+    // NOT USED
+    case 0b1101_0110: {
+      instruction = {
+        kind: 'NOT USED',
+        byte: firstByte,
+      };
+
+      break;
+    }
+
+    // d7
+    // xlat Translate byte to al
+    case 0b1101_0111: {
+      instruction = {
+        kind: 'xlatTranslateByteToAl',
+      };
+
+      break;
+    }
+
+    // d8 - df
+    // esc Escape (to external device)
+    // Layout 1101 1xxx   (x = first three bits of esc op code)
+    // Dunno, some cursed thing to do with the 8087 co-processor
+    case 0b1101_1000:
+    case 0b1101_1001:
+    case 0b1101_1010:
+    case 0b1101_1011:
+    case 0b1101_1100:
+    case 0b1101_1101:
+    case 0b1101_1110:
+    case 0b1101_1111: {
+      const firstOpCodePart = firstByte & 0b0000_0111;
+
+      const [secondOpCodePart, sourceRm] = decodeMiddleThreeBitsAndModRm(
+        instructionBytes,
+        indexRef,
+        1,
+      );
+
+      // I think this is right lol, who knows. The fact that these swap makes me think not,
+      // but this seems to be what the manual says
+      const fullOpCode = (firstOpCodePart << 3) + (secondOpCodePart >> 3);
+
+      const source = decodeRegisterOrEffectiveAddressCalculation(
+        instructionBytes,
+        indexRef,
+        sourceRm,
+        segmentOverridePrefixRef,
+      );
+
+      instruction = {
+        kind: 'escEscapeToExternalDevice',
+        source,
+        data: fullOpCode,
+      };
+
+      break;
+    }
+
+    // e0 - e3
+    // Loop and jump on cx zero
+    case 0b1110_0000:
+    case 0b1110_0001:
+    case 0b1110_0010:
+    case 0b1110_0011: {
+      indexRef.index++;
+
+      instruction = {
+        kind: loopOrJumpCxInstructionTable[firstByte & 0b0000_0011],
+        signedIncrement: getAsTwosComplement(instructionBytes[indexRef.index], 128),
+      };
+
+      break;
+    }
+
+    // e4 - e7
+    // in/out Fixed port
+    case 0b1110_0100:
+    case 0b1110_0101:
+    case 0b1110_0110:
+    case 0b1110_0111: {
+      const instructionBit = firstByte & 0b0000_0010;
+      const wBit = firstByte & 0b0000_0001;
+
+      const instructionKind: InFixedPortInstruction['kind'] | OutFixedPortInstruction['kind'] =
+        instructionBit ? 'outFixedPort' : 'inFixedPort';
+
+      const dest = wBit ? axReg : alReg;
+
+      const data = decodeIntLiteralData(instructionBytes, indexRef, 0);
+
+      instruction = {
+        kind: instructionKind,
+        dest,
+        data,
+      };
+
+      break;
+    }
+
+    // e8
+    // call Direct within segment
+    case 0b1110_1000: {
+      const ip = decodeIntLiteralData(instructionBytes, indexRef, 1);
+
+      instruction = {
+        kind: 'callDirectWithinSegment',
+        ip,
+      };
+
+      break;
+    }
+
+    // e9
+    // jmp Direct within segment
+    case 0b1110_1001: {
+      const ip = decodeIntLiteralData(instructionBytes, indexRef, 1);
+
+      instruction = {
+        kind: 'jmpDirectWithinSegment',
+        ip,
+      };
+
+      break;
+    }
+
+    // ea
+    // jmp Direct intersegment
+    case 0b1110_1010: {
+      const ip = decodeIntLiteralData(instructionBytes, indexRef, 1);
+      const cs = decodeIntLiteralData(instructionBytes, indexRef, 1);
+
+      instruction = {
+        kind: 'jmpDirectIntersegment',
+        ip,
+        cs,
+      };
+
+      break;
+    }
+
+    // eb
+    // jmp Direct within segment short
+    case 0b1110_1011: {
+      const ip = decodeIntLiteralData(instructionBytes, indexRef, 0);
+
+      instruction = {
+        kind: 'jmpDirectWithinSegmentShort',
+        ip,
+      };
+
+      break;
+    }
+
+    // ec - ef
+    // in/out Variable port
+    case 0b1110_1100:
+    case 0b1110_1101:
+    case 0b1110_1110:
+    case 0b1110_1111: {
+      const instructionBit = firstByte & 0b0000_0010;
+      const wBit = firstByte & 0b0000_0001;
+
+      const instructionKind:
+        | InVariablePortInstruction['kind']
+        | OutVariablePortInstruction['kind'] = instructionBit
+        ? 'outVariablePortInstruction'
+        : 'inVariablePort';
+
+      const dest = wBit ? axReg : alReg;
+
+      instruction = {
+        kind: instructionKind,
+        dest,
+      };
+
+      break;
+    }
+
     default:
       instruction = { kind: 'UNKNOWN' };
   }
