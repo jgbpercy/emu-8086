@@ -17,6 +17,7 @@ export interface AddRegisterMemoryWithRegisterToEitherInstruction {
   readonly kind: 'addRegisterMemoryWithRegisterToEither';
   readonly dest: RegisterOrEac;
   readonly source: RegisterOrEac;
+  readonly lock: boolean;
 }
 
 export interface AddImmediateToAccumulatorInstruction {
@@ -39,6 +40,7 @@ export interface OrRegisterMemoryAndRegisterToEitherInstruction {
   readonly kind: 'orRegisterMemoryAndRegisterToEither';
   readonly dest: RegisterOrEac;
   readonly source: RegisterOrEac;
+  readonly lock: boolean;
 }
 
 export interface OrImmediateToAccumulatorInstruction {
@@ -51,6 +53,7 @@ export interface AdcRegisterMemoryWithRegisterToEitherInstruction {
   readonly kind: 'adcRegisterMemoryWithRegisterToEither';
   readonly dest: RegisterOrEac;
   readonly source: RegisterOrEac;
+  readonly lock: boolean;
 }
 
 export interface AdcImmediateToAccumulatorInstruction {
@@ -63,6 +66,7 @@ export interface SbbRegisterMemoryAndRegisterToEitherInstruction {
   readonly kind: 'sbbRegisterMemoryAndRegisterToEither';
   readonly dest: RegisterOrEac;
   readonly source: RegisterOrEac;
+  readonly lock: boolean;
 }
 
 export interface SbbImmediateFromAccumulatorInstruction {
@@ -75,6 +79,7 @@ export interface AndRegisterMemoryWithRegisterToEitherInstruction {
   readonly kind: 'andRegisterMemoryWithRegisterToEither';
   readonly dest: RegisterOrEac;
   readonly source: RegisterOrEac;
+  readonly lock: boolean;
 }
 
 export interface AndImmediateToAccumulatorInstruction {
@@ -91,6 +96,7 @@ export interface SubRegisterMemoryAndRegisterToEitherInstruction {
   readonly kind: 'subRegisterMemoryAndRegisterToEither';
   readonly dest: RegisterOrEac;
   readonly source: RegisterOrEac;
+  readonly lock: boolean;
 }
 
 export interface SubImmediateFromAccumulatorInstruction {
@@ -107,6 +113,7 @@ export interface XorRegisterMemoryAndRegisterToEitherInstruction {
   readonly kind: 'xorRegisterMemoryAndRegisterToEither';
   readonly dest: RegisterOrEac;
   readonly source: RegisterOrEac;
+  readonly lock: boolean;
 }
 
 export interface XorImmediateToAccumulatorInstruction {
@@ -239,42 +246,49 @@ export interface AddImmediateToRegisterMemoryInstruction {
   readonly kind: 'addImmediateToRegisterMemory';
   readonly dest: RegisterOrEac;
   readonly data: number;
+  readonly lock: boolean;
 }
 
 export interface OrImmediateToRegisterMemoryInstruction {
   readonly kind: 'orImmediateToRegisterMemory';
   readonly dest: RegisterOrEac;
   readonly data: number;
+  readonly lock: boolean;
 }
 
 export interface AdcImmediateToRegisterMemoryInstruction {
   readonly kind: 'adcImmediateToRegisterMemory';
   readonly dest: RegisterOrEac;
   readonly data: number;
+  readonly lock: boolean;
 }
 
 export interface SbbImmediateToRegisterMemoryInstruction {
   readonly kind: 'sbbImmediateToRegisterMemory';
   readonly dest: RegisterOrEac;
   readonly data: number;
+  readonly lock: boolean;
 }
 
 export interface AndImmediateToRegisterMemoryInstruction {
   readonly kind: 'andImmediateToRegisterMemory';
   readonly dest: RegisterOrEac;
   readonly data: number;
+  readonly lock: boolean;
 }
 
 export interface SubImmediateToRegisterMemoryInstruction {
   readonly kind: 'subImmediateToRegisterMemory';
   readonly dest: RegisterOrEac;
   readonly data: number;
+  readonly lock: boolean;
 }
 
 export interface XorImmediateToRegisterMemoryInstruction {
   readonly kind: 'xorImmediateToRegisterMemory';
   readonly dest: RegisterOrEac;
   readonly data: number;
+  readonly lock: boolean;
 }
 
 export interface CmpImmediateToRegisterMemoryInstruction {
@@ -293,6 +307,7 @@ export interface XchgRegisterMemoryWithRegisterInstruction {
   readonly kind: 'xchgRegisterMemoryWithRegister';
   readonly dest: RegisterOrEac;
   readonly source: RegisterOrEac;
+  readonly lock: boolean;
 }
 
 export interface MovRegisterMemoryToFromRegisterInstruction {
@@ -1004,24 +1019,38 @@ const loopOrJumpCxInstructionTable: ReadonlyArray<LoopOrJumpCxInstuction['kind']
   'jcxzJumpOnCxZero',
 ];
 
-interface IndexRef {
-  index: number;
-}
+class DecodingContext {
+  index = 0;
 
-class SegmentOverridePrefixRef {
-  private _segReg?: SegmentRegister;
+  private _segmentOverridePrefix?: SegmentRegister;
 
-  set segReg(val: SegmentRegister | undefined) {
-    if (val !== undefined && this._segReg !== undefined) {
-      throw Error('Attempted to set segment register override prefix state when already set!');
+  set segmentOverridePrefix(val: SegmentRegister | undefined) {
+    if (val !== undefined && this._segmentOverridePrefix !== undefined) {
+      throw Error('Attempted to set segment register override prefix context when already set!');
     }
 
-    this._segReg = val;
+    this._segmentOverridePrefix = val;
   }
 
-  get segReg(): SegmentRegister | undefined {
-    return this._segReg;
+  get segmentOverridePrefix(): SegmentRegister | undefined {
+    return this._segmentOverridePrefix;
   }
+
+  private _lock = false;
+
+  set lock(val: boolean) {
+    if (val && this._lock) {
+      throw Error('Attempted to set lock context when already set!');
+    }
+
+    this._lock = val;
+  }
+
+  get lock(): boolean {
+    return this._lock;
+  }
+
+  constructor(public readonly instructionBytes: InstructionBytes) {}
 }
 
 type InstructionBytes = Uint8Array;
@@ -1030,12 +1059,12 @@ export function decodeInstructions(
   instructionBytes: InstructionBytes,
 ): ReadonlyArray<DecodedInstruction> {
   const instructions: DecodedInstruction[] = [];
-  const indexRef: IndexRef = { index: 0 };
-  const segmentOverridePrefixRef = new SegmentOverridePrefixRef();
 
-  while (indexRef.index < instructionBytes.length) {
-    console.log(indexRef.index);
-    instructions.push(decodeInstruction(instructionBytes, indexRef, segmentOverridePrefixRef));
+  const context = new DecodingContext(instructionBytes);
+
+  while (context.index < instructionBytes.length) {
+    console.log(context.index);
+    instructions.push(decodeInstruction(context));
   }
 
   return instructions;
@@ -1047,25 +1076,35 @@ export function decodeInstructionsAndByteIndices(
   instructionBytes: InstructionBytes,
 ): ReadonlyArray<DecodedInstructionWithByteIndex> {
   const instructions: DecodedInstructionWithByteIndex[] = [];
-  const indexRef: IndexRef = { index: 0 };
-  const segmentOverridePrefixRef = new SegmentOverridePrefixRef();
 
-  while (indexRef.index < instructionBytes.length) {
-    instructions.push([
-      indexRef.index,
-      decodeInstruction(instructionBytes, indexRef, segmentOverridePrefixRef),
-    ]);
+  const context = new DecodingContext(instructionBytes);
+
+  while (context.index < instructionBytes.length) {
+    instructions.push([context.index, decodeInstruction(context)]);
   }
 
   return instructions;
 }
 
-function decodeInstruction(
-  instructionBytes: InstructionBytes,
-  indexRef: IndexRef,
-  segmentOverridePrefixRef: SegmentOverridePrefixRef,
-): DecodedInstruction {
-  const firstByte = instructionBytes[indexRef.index];
+function consumeLockPrefix(context: DecodingContext, dest: RegisterOrEac): boolean {
+  // I went off this random page, which is for ia-32
+  // It says we can lock xchg, add, or, adc, sbb, and, sub, xor, not, neg, inc, dec
+  // It also lists instructions that aren't on the 8086,
+  // and seems to say we can only lock when dest is mem, except for xchg
+  // TODO actually find this in the
+  if (dest.kind === 'reg' && context.lock) {
+    throw Error('This instruction is not lockable');
+  }
+
+  const value = context.lock;
+
+  context.lock = false;
+
+  return value;
+}
+
+function decodeInstruction(context: DecodingContext): DecodedInstruction {
+  const firstByte = context.instructionBytes[context.index];
 
   let instruction: DecodedInstruction;
 
@@ -1077,16 +1116,13 @@ function decodeInstruction(
     case 0b0000_0001:
     case 0b0000_0010:
     case 0b0000_0011: {
-      const [dest, source] = decodeDestSourceForModRegRmInstruction(
-        instructionBytes,
-        indexRef,
-        segmentOverridePrefixRef,
-      );
+      const [dest, source] = decodeDestSourceForModRegRmInstruction(context);
 
       instruction = {
         kind: 'addRegisterMemoryWithRegisterToEither',
         dest,
         source,
+        lock: consumeLockPrefix(context, dest),
       };
 
       break;
@@ -1097,10 +1133,7 @@ function decodeInstruction(
     // Layout 0000 010w
     case 0b0000_0100:
     case 0b0000_0101: {
-      const [dest, data] = decodeDestDataForImmediateToAccumulatorInstruction(
-        instructionBytes,
-        indexRef,
-      );
+      const [dest, data] = decodeDestDataForImmediateToAccumulatorInstruction(context);
 
       instruction = {
         kind: 'addImmediateToAccumulator',
@@ -1140,16 +1173,13 @@ function decodeInstruction(
     case 0b0000_1001:
     case 0b0000_1010:
     case 0b0000_1011: {
-      const [dest, source] = decodeDestSourceForModRegRmInstruction(
-        instructionBytes,
-        indexRef,
-        segmentOverridePrefixRef,
-      );
+      const [dest, source] = decodeDestSourceForModRegRmInstruction(context);
 
       instruction = {
         kind: 'orRegisterMemoryAndRegisterToEither',
         dest,
         source,
+        lock: consumeLockPrefix(context, dest),
       };
 
       break;
@@ -1160,10 +1190,7 @@ function decodeInstruction(
     // Layout 0000 110w
     case 0b0000_1100:
     case 0b0000_1101: {
-      const [dest, data] = decodeDestDataForImmediateToAccumulatorInstruction(
-        instructionBytes,
-        indexRef,
-      );
+      const [dest, data] = decodeDestDataForImmediateToAccumulatorInstruction(context);
 
       instruction = {
         kind: 'orImmediateToAccumulator',
@@ -1203,16 +1230,13 @@ function decodeInstruction(
     case 0b0001_0001:
     case 0b0001_0010:
     case 0b0001_0011: {
-      const [dest, source] = decodeDestSourceForModRegRmInstruction(
-        instructionBytes,
-        indexRef,
-        segmentOverridePrefixRef,
-      );
+      const [dest, source] = decodeDestSourceForModRegRmInstruction(context);
 
       instruction = {
         kind: 'adcRegisterMemoryWithRegisterToEither',
         dest,
         source,
+        lock: consumeLockPrefix(context, dest),
       };
 
       break;
@@ -1223,10 +1247,7 @@ function decodeInstruction(
     // Layout 0001 010w
     case 0b0001_0100:
     case 0b0001_0101: {
-      const [dest, data] = decodeDestDataForImmediateToAccumulatorInstruction(
-        instructionBytes,
-        indexRef,
-      );
+      const [dest, data] = decodeDestDataForImmediateToAccumulatorInstruction(context);
 
       instruction = {
         kind: 'adcImmediateToAccumulator',
@@ -1266,16 +1287,13 @@ function decodeInstruction(
     case 0b0001_1001:
     case 0b0001_1010:
     case 0b0001_1011: {
-      const [dest, source] = decodeDestSourceForModRegRmInstruction(
-        instructionBytes,
-        indexRef,
-        segmentOverridePrefixRef,
-      );
+      const [dest, source] = decodeDestSourceForModRegRmInstruction(context);
 
       instruction = {
         kind: 'sbbRegisterMemoryAndRegisterToEither',
         dest,
         source,
+        lock: consumeLockPrefix(context, dest),
       };
 
       break;
@@ -1286,10 +1304,7 @@ function decodeInstruction(
     // Layout 0001 110w
     case 0b0001_1100:
     case 0b0001_1101: {
-      const [dest, data] = decodeDestDataForImmediateToAccumulatorInstruction(
-        instructionBytes,
-        indexRef,
-      );
+      const [dest, data] = decodeDestDataForImmediateToAccumulatorInstruction(context);
 
       instruction = {
         kind: 'sbbImmediateFromAccumulator',
@@ -1329,16 +1344,13 @@ function decodeInstruction(
     case 0b0010_0001:
     case 0b0010_0010:
     case 0b0010_0011: {
-      const [dest, source] = decodeDestSourceForModRegRmInstruction(
-        instructionBytes,
-        indexRef,
-        segmentOverridePrefixRef,
-      );
+      const [dest, source] = decodeDestSourceForModRegRmInstruction(context);
 
       instruction = {
         kind: 'andRegisterMemoryWithRegisterToEither',
         dest,
         source,
+        lock: consumeLockPrefix(context, dest),
       };
 
       break;
@@ -1349,10 +1361,7 @@ function decodeInstruction(
     // Layout 0010 010w
     case 0b0010_0100:
     case 0b0010_0101: {
-      const [dest, data] = decodeDestDataForImmediateToAccumulatorInstruction(
-        instructionBytes,
-        indexRef,
-      );
+      const [dest, data] = decodeDestDataForImmediateToAccumulatorInstruction(context);
 
       instruction = {
         kind: 'andImmediateToAccumulator',
@@ -1367,11 +1376,11 @@ function decodeInstruction(
     // es Segment override prefix
     // cursed: recurse (only 1 depth) and attach to the next instruction
     case 0b0010_0110: {
-      segmentOverridePrefixRef.segReg = 'es';
+      context.segmentOverridePrefix = 'es';
 
-      indexRef.index++;
+      context.index++;
 
-      return decodeInstruction(instructionBytes, indexRef, segmentOverridePrefixRef);
+      return decodeInstruction(context);
     }
 
     // 27
@@ -1391,16 +1400,13 @@ function decodeInstruction(
     case 0b0010_1001:
     case 0b0010_1010:
     case 0b0010_1011: {
-      const [dest, source] = decodeDestSourceForModRegRmInstruction(
-        instructionBytes,
-        indexRef,
-        segmentOverridePrefixRef,
-      );
+      const [dest, source] = decodeDestSourceForModRegRmInstruction(context);
 
       instruction = {
         kind: 'subRegisterMemoryAndRegisterToEither',
         dest,
         source,
+        lock: consumeLockPrefix(context, dest),
       };
 
       break;
@@ -1411,10 +1417,7 @@ function decodeInstruction(
     // Layout 0010 110w
     case 0b0010_1100:
     case 0b0010_1101: {
-      const [dest, data] = decodeDestDataForImmediateToAccumulatorInstruction(
-        instructionBytes,
-        indexRef,
-      );
+      const [dest, data] = decodeDestDataForImmediateToAccumulatorInstruction(context);
 
       instruction = {
         kind: 'subImmediateFromAccumulator',
@@ -1429,11 +1432,11 @@ function decodeInstruction(
     // cs Segment override prefix
     // cursed: recurse (only 1 depth) and attach to the next instruction
     case 0b0010_1110: {
-      segmentOverridePrefixRef.segReg = 'cs';
+      context.segmentOverridePrefix = 'cs';
 
-      indexRef.index++;
+      context.index++;
 
-      return decodeInstruction(instructionBytes, indexRef, segmentOverridePrefixRef);
+      return decodeInstruction(context);
     }
 
     // 2f
@@ -1453,16 +1456,13 @@ function decodeInstruction(
     case 0b0011_0001:
     case 0b0011_0010:
     case 0b0011_0011: {
-      const [dest, source] = decodeDestSourceForModRegRmInstruction(
-        instructionBytes,
-        indexRef,
-        segmentOverridePrefixRef,
-      );
+      const [dest, source] = decodeDestSourceForModRegRmInstruction(context);
 
       instruction = {
         kind: 'xorRegisterMemoryAndRegisterToEither',
         dest,
         source,
+        lock: consumeLockPrefix(context, dest),
       };
 
       break;
@@ -1473,10 +1473,7 @@ function decodeInstruction(
     // Layout 0011 010w
     case 0b0011_0100:
     case 0b0011_0101: {
-      const [dest, data] = decodeDestDataForImmediateToAccumulatorInstruction(
-        instructionBytes,
-        indexRef,
-      );
+      const [dest, data] = decodeDestDataForImmediateToAccumulatorInstruction(context);
 
       instruction = {
         kind: 'xorImmediateToAccumulator',
@@ -1491,11 +1488,11 @@ function decodeInstruction(
     // ss Segment override prefix
     // cursed: recurse (only 1 depth) and attach to the next instruction
     case 0b0011_0110: {
-      segmentOverridePrefixRef.segReg = 'ss';
+      context.segmentOverridePrefix = 'ss';
 
-      indexRef.index++;
+      context.index++;
 
-      return decodeInstruction(instructionBytes, indexRef, segmentOverridePrefixRef);
+      return decodeInstruction(context);
     }
 
     // 37
@@ -1515,11 +1512,7 @@ function decodeInstruction(
     case 0b0011_1001:
     case 0b0011_1010:
     case 0b0011_1011: {
-      const [dest, source] = decodeDestSourceForModRegRmInstruction(
-        instructionBytes,
-        indexRef,
-        segmentOverridePrefixRef,
-      );
+      const [dest, source] = decodeDestSourceForModRegRmInstruction(context);
 
       instruction = {
         kind: 'cmpRegisterMemoryAndRegister',
@@ -1535,10 +1528,7 @@ function decodeInstruction(
     // Layout 0011 110w
     case 0b0011_1100:
     case 0b0011_1101: {
-      const [dest, data] = decodeDestDataForImmediateToAccumulatorInstruction(
-        instructionBytes,
-        indexRef,
-      );
+      const [dest, data] = decodeDestDataForImmediateToAccumulatorInstruction(context);
 
       instruction = {
         kind: 'cmpImmediateWithAccumulator',
@@ -1553,11 +1543,11 @@ function decodeInstruction(
     // ds Segment override prefix
     // cursed: recurse (only 1 depth) and attach to the next instruction
     case 0b0011_1110: {
-      segmentOverridePrefixRef.segReg = 'ds';
+      context.segmentOverridePrefix = 'ds';
 
-      indexRef.index++;
+      context.index++;
 
-      return decodeInstruction(instructionBytes, indexRef, segmentOverridePrefixRef);
+      return decodeInstruction(context);
     }
 
     // 3f
@@ -1697,11 +1687,11 @@ function decodeInstruction(
     case 0b0111_1101:
     case 0b0111_1110:
     case 0b0111_1111: {
-      indexRef.index++;
+      context.index++;
 
       instruction = {
         kind: shortLabelJumpInstructionTable[firstByte & 0b0000_1111],
-        signedIncrement: getAsTwosComplement(instructionBytes[indexRef.index], 128),
+        signedIncrement: getAsTwosComplement(context.instructionBytes[context.index], 128),
       };
 
       break;
@@ -1718,7 +1708,7 @@ function decodeInstruction(
       const wBit = firstByte & 0b0000_0001;
       const sBit = firstByte & 0b0000_0010;
 
-      const [opCodeBits, destRm] = decodeMiddleThreeBitsAndModRm(instructionBytes, indexRef, wBit);
+      const [opCodeBits, destRm] = decodeMiddleThreeBitsAndModRm(context, wBit);
 
       const instructionKind =
         standardArithmeticLogicImmediateToRegisterMemoryInstructionTable[opCodeBits >> 3];
@@ -1733,16 +1723,11 @@ function decodeInstruction(
         break;
       }
 
-      const dest = decodeRegisterOrEffectiveAddressCalculation(
-        instructionBytes,
-        indexRef,
-        destRm,
-        segmentOverridePrefixRef,
-      );
+      const dest = decodeRegisterOrEffectiveAddressCalculation(context, destRm);
 
       const wBitForDataDecode = wBit && !sBit ? 1 : 0;
 
-      let data = decodeIntLiteralData(instructionBytes, indexRef, wBitForDataDecode);
+      let data = decodeIntLiteralData(context, wBitForDataDecode);
 
       if (sBit) {
         data = getAsTwosComplement(data, 128);
@@ -1752,6 +1737,7 @@ function decodeInstruction(
         kind: instructionKind,
         dest,
         data,
+        lock: consumeLockPrefix(context, dest),
       };
 
       break;
@@ -1762,11 +1748,7 @@ function decodeInstruction(
     // Layout 1000 010w
     case 0b1000_0100:
     case 0b1000_0101: {
-      const [dest, source] = decodeDestSourceForModRegRmInstruction(
-        instructionBytes,
-        indexRef,
-        segmentOverridePrefixRef,
-      );
+      const [dest, source] = decodeDestSourceForModRegRmInstruction(context);
 
       instruction = {
         kind: 'testRegisterMemoryAndRegister',
@@ -1782,16 +1764,18 @@ function decodeInstruction(
     // Layout 1000 011w
     case 0b1000_0110:
     case 0b1000_0111: {
-      const [dest, source] = decodeDestSourceForModRegRmInstruction(
-        instructionBytes,
-        indexRef,
-        segmentOverridePrefixRef,
-      );
+      const [dest, source] = decodeDestSourceForModRegRmInstruction(context);
+
+      // Don't use consumeLockPrefix, as we can lock even if source is mem (I think)
+      const lock = context.lock;
+
+      context.lock = false;
 
       instruction = {
         kind: 'xchgRegisterMemoryWithRegister',
         dest,
         source,
+        lock,
       };
 
       break;
@@ -1804,11 +1788,7 @@ function decodeInstruction(
     case 0b1000_1001:
     case 0b1000_1010:
     case 0b1000_1011: {
-      const [dest, source] = decodeDestSourceForModRegRmInstruction(
-        instructionBytes,
-        indexRef,
-        segmentOverridePrefixRef,
-      );
+      const [dest, source] = decodeDestSourceForModRegRmInstruction(context);
 
       instruction = {
         kind: 'movRegisterMemoryToFromRegister',
@@ -1822,7 +1802,7 @@ function decodeInstruction(
     // 8c
     // mov Segment register to register/memory
     case 0b1000_1100: {
-      const [srBits, destRm] = decodeMiddleThreeBitsAndModRm(instructionBytes, indexRef, 1);
+      const [srBits, destRm] = decodeMiddleThreeBitsAndModRm(context, 1);
 
       if (srBits & 0b0010_0000) {
         throw Error(
@@ -1832,12 +1812,7 @@ function decodeInstruction(
 
       const source = segmentRegisterTable[srBits >> 3];
 
-      const dest = decodeRegisterOrEffectiveAddressCalculation(
-        instructionBytes,
-        indexRef,
-        destRm,
-        segmentOverridePrefixRef,
-      );
+      const dest = decodeRegisterOrEffectiveAddressCalculation(context, destRm);
 
       instruction = {
         kind: 'movSegmentRegisterToRegisterMemory',
@@ -1851,7 +1826,7 @@ function decodeInstruction(
     // 8d
     // lea Load EA to register
     case 0b1000_1101: {
-      const [dest, sourceCategory] = decodeModRegRm(instructionBytes, indexRef, 1);
+      const [dest, sourceCategory] = decodeModRegRm(context, 1);
 
       if (sourceCategory.kind === 'reg') {
         throw Error(
@@ -1859,12 +1834,7 @@ function decodeInstruction(
         );
       }
 
-      const source = decodeEffectiveAddressCalculation(
-        instructionBytes,
-        indexRef,
-        sourceCategory,
-        segmentOverridePrefixRef,
-      );
+      const source = decodeEffectiveAddressCalculation(context, sourceCategory);
 
       instruction = {
         kind: 'leaLoadEaToRegister',
@@ -1878,7 +1848,7 @@ function decodeInstruction(
     // 8e
     // mov Register/memory to segment register
     case 0b1000_1110: {
-      const [srBits, sourceRm] = decodeMiddleThreeBitsAndModRm(instructionBytes, indexRef, 1);
+      const [srBits, sourceRm] = decodeMiddleThreeBitsAndModRm(context, 1);
 
       if (srBits & 0b0010_0000) {
         throw Error(
@@ -1888,12 +1858,7 @@ function decodeInstruction(
 
       const dest = segmentRegisterTable[srBits >> 3];
 
-      const source = decodeRegisterOrEffectiveAddressCalculation(
-        instructionBytes,
-        indexRef,
-        sourceRm,
-        segmentOverridePrefixRef,
-      );
+      const source = decodeRegisterOrEffectiveAddressCalculation(context, sourceRm);
 
       instruction = {
         kind: 'movRegisterMemoryToSegmentRegister',
@@ -1907,7 +1872,7 @@ function decodeInstruction(
     // 8f
     // pop Register/memory
     case 0b1000_1111: {
-      const [middleBits, destRm] = decodeMiddleThreeBitsAndModRm(instructionBytes, indexRef, 1);
+      const [middleBits, destRm] = decodeMiddleThreeBitsAndModRm(context, 1);
 
       if (middleBits !== 0) {
         throw Error(
@@ -1915,12 +1880,7 @@ function decodeInstruction(
         );
       }
 
-      const dest = decodeRegisterOrEffectiveAddressCalculation(
-        instructionBytes,
-        indexRef,
-        destRm,
-        segmentOverridePrefixRef,
-      );
+      const dest = decodeRegisterOrEffectiveAddressCalculation(context, destRm);
 
       instruction = {
         kind: 'popRegisterMemory',
@@ -1985,8 +1945,8 @@ function decodeInstruction(
     // 9a
     // call Direct intersegment
     case 0b1001_1010: {
-      const ip = decodeIntLiteralData(instructionBytes, indexRef, 1);
-      const cs = decodeIntLiteralData(instructionBytes, indexRef, 1);
+      const ip = decodeIntLiteralData(context, 1);
+      const cs = decodeIntLiteralData(context, 1);
 
       instruction = {
         kind: 'callDirectIntersegment',
@@ -2059,7 +2019,7 @@ function decodeInstruction(
 
       const reg = wBit ? axReg : alReg;
 
-      const displacement = decodeIntLiteralData(instructionBytes, indexRef, 1);
+      const displacement = decodeIntLiteralData(context, 1);
 
       const memoryAddressCalculation = {
         kind: 'mem',
@@ -2109,7 +2069,7 @@ function decodeInstruction(
 
       const dest = wBit ? axReg : alReg;
 
-      const data = decodeIntLiteralData(instructionBytes, indexRef, wBit);
+      const data = decodeIntLiteralData(context, wBit);
 
       instruction = {
         kind: 'testImmediateWithAccumulator',
@@ -2179,7 +2139,7 @@ function decodeInstruction(
       const wBit = (firstByte & 0b0000_1000) === 0b0000_1000 ? 1 : 0;
       const dest = regTable[((firstByte & 0b0000_0111) << 1) | wBit];
 
-      const data = decodeIntLiteralData(instructionBytes, indexRef, wBit);
+      const data = decodeIntLiteralData(context, wBit);
 
       instruction = {
         kind: 'movImmediateToRegister',
@@ -2205,7 +2165,7 @@ function decodeInstruction(
     // c2
     // ret Within seg adding immed to SP
     case 0b1100_0010: {
-      const data = decodeIntLiteralData(instructionBytes, indexRef, 1);
+      const data = decodeIntLiteralData(context, 1);
 
       instruction = {
         kind: 'retWithinSegAddingImmedToSp',
@@ -2230,11 +2190,7 @@ function decodeInstruction(
     // lds load pointer to DS
     case 0b1100_0100:
     case 0b1100_0101: {
-      const [regBits, sourceEacCategory] = decodeMiddleThreeBitsAndModRm(
-        instructionBytes,
-        indexRef,
-        1,
-      );
+      const [regBits, sourceEacCategory] = decodeMiddleThreeBitsAndModRm(context, 1);
 
       if (sourceEacCategory.kind === 'reg') {
         throw Error("les instruction got register source. Don't think this is allowed.");
@@ -2242,12 +2198,7 @@ function decodeInstruction(
 
       const dest = wordRegisterTable[regBits >> 3];
 
-      const source = decodeEffectiveAddressCalculation(
-        instructionBytes,
-        indexRef,
-        sourceEacCategory,
-        segmentOverridePrefixRef,
-      );
+      const source = decodeEffectiveAddressCalculation(context, sourceEacCategory);
 
       instruction = {
         kind: 0b0000_0001 & firstByte ? 'ldsLoadPointerToDs' : 'lesLoadPointerToEs',
@@ -2265,7 +2216,7 @@ function decodeInstruction(
     case 0b1100_0111: {
       const wBit = firstByte & 0b0000_0001;
 
-      const [reg, destRm] = decodeModRegRm(instructionBytes, indexRef, wBit);
+      const [reg, destRm] = decodeModRegRm(context, wBit);
 
       if (reg.register !== 'al' && reg.register !== 'ax') {
         throw new Error(
@@ -2273,14 +2224,9 @@ function decodeInstruction(
         );
       }
 
-      const dest = decodeRegisterOrEffectiveAddressCalculation(
-        instructionBytes,
-        indexRef,
-        destRm,
-        segmentOverridePrefixRef,
-      );
+      const dest = decodeRegisterOrEffectiveAddressCalculation(context, destRm);
 
-      const data = decodeIntLiteralData(instructionBytes, indexRef, wBit);
+      const data = decodeIntLiteralData(context, wBit);
 
       instruction = { kind: 'movImmediateToRegisterMemory', dest, data };
 
@@ -2302,7 +2248,7 @@ function decodeInstruction(
     // ca
     // ret Intersegment adding immediate to SP
     case 0b1100_1010: {
-      const data = decodeIntLiteralData(instructionBytes, indexRef, 1);
+      const data = decodeIntLiteralData(context, 1);
 
       instruction = {
         kind: 'retIntersegmentAddingImmediateToSp',
@@ -2335,7 +2281,7 @@ function decodeInstruction(
     // cd
     // int Type specified
     case 0b1100_1101: {
-      const data = decodeIntLiteralData(instructionBytes, indexRef, 0);
+      const data = decodeIntLiteralData(context, 0);
 
       instruction = {
         kind: 'intTypeSpecified',
@@ -2375,7 +2321,7 @@ function decodeInstruction(
       const wBit = firstByte & 0b0000_0001;
       const vBit = firstByte & 0b0000_0010;
 
-      const [opCodeBits, destRm] = decodeMiddleThreeBitsAndModRm(instructionBytes, indexRef, wBit);
+      const [opCodeBits, destRm] = decodeMiddleThreeBitsAndModRm(context, wBit);
 
       const instructionKind = standardLogicWithOneOrClInstructionTable[opCodeBits >> 3];
 
@@ -2385,12 +2331,7 @@ function decodeInstruction(
         );
       }
 
-      const dest = decodeRegisterOrEffectiveAddressCalculation(
-        instructionBytes,
-        indexRef,
-        destRm,
-        segmentOverridePrefixRef,
-      );
+      const dest = decodeRegisterOrEffectiveAddressCalculation(context, destRm);
 
       const source: StandardLogicWithOneOrClInstruction['source'] = vBit ? clReg : 1;
 
@@ -2413,7 +2354,7 @@ function decodeInstruction(
       };
 
       // These guys have an extra byte that is always 0000 1010 because why not lol
-      indexRef.index++;
+      context.index++;
 
       break;
     }
@@ -2426,7 +2367,7 @@ function decodeInstruction(
       };
 
       // These guys have an extra byte that is always 0000 1010 because why not lol
-      indexRef.index++;
+      context.index++;
 
       break;
     }
@@ -2466,22 +2407,13 @@ function decodeInstruction(
     case 0b1101_1111: {
       const firstOpCodePart = firstByte & 0b0000_0111;
 
-      const [secondOpCodePart, sourceRm] = decodeMiddleThreeBitsAndModRm(
-        instructionBytes,
-        indexRef,
-        1,
-      );
+      const [secondOpCodePart, sourceRm] = decodeMiddleThreeBitsAndModRm(context, 1);
 
       // I think this is right lol, who knows. The fact that these swap makes me think not,
       // but this seems to be what the manual says
       const fullOpCode = (firstOpCodePart << 3) + (secondOpCodePart >> 3);
 
-      const source = decodeRegisterOrEffectiveAddressCalculation(
-        instructionBytes,
-        indexRef,
-        sourceRm,
-        segmentOverridePrefixRef,
-      );
+      const source = decodeRegisterOrEffectiveAddressCalculation(context, sourceRm);
 
       instruction = {
         kind: 'escEscapeToExternalDevice',
@@ -2498,11 +2430,11 @@ function decodeInstruction(
     case 0b1110_0001:
     case 0b1110_0010:
     case 0b1110_0011: {
-      indexRef.index++;
+      context.index++;
 
       instruction = {
         kind: loopOrJumpCxInstructionTable[firstByte & 0b0000_0011],
-        signedIncrement: getAsTwosComplement(instructionBytes[indexRef.index], 128),
+        signedIncrement: getAsTwosComplement(context.instructionBytes[context.index], 128),
       };
 
       break;
@@ -2522,7 +2454,7 @@ function decodeInstruction(
 
       const dest = wBit ? axReg : alReg;
 
-      const data = decodeIntLiteralData(instructionBytes, indexRef, 0);
+      const data = decodeIntLiteralData(context, 0);
 
       instruction = {
         kind: instructionKind,
@@ -2536,7 +2468,7 @@ function decodeInstruction(
     // e8
     // call Direct within segment
     case 0b1110_1000: {
-      const ip = decodeIntLiteralData(instructionBytes, indexRef, 1);
+      const ip = decodeIntLiteralData(context, 1);
 
       instruction = {
         kind: 'callDirectWithinSegment',
@@ -2549,7 +2481,7 @@ function decodeInstruction(
     // e9
     // jmp Direct within segment
     case 0b1110_1001: {
-      const ip = decodeIntLiteralData(instructionBytes, indexRef, 1);
+      const ip = decodeIntLiteralData(context, 1);
 
       instruction = {
         kind: 'jmpDirectWithinSegment',
@@ -2562,8 +2494,8 @@ function decodeInstruction(
     // ea
     // jmp Direct intersegment
     case 0b1110_1010: {
-      const ip = decodeIntLiteralData(instructionBytes, indexRef, 1);
-      const cs = decodeIntLiteralData(instructionBytes, indexRef, 1);
+      const ip = decodeIntLiteralData(context, 1);
+      const cs = decodeIntLiteralData(context, 1);
 
       instruction = {
         kind: 'jmpDirectIntersegment',
@@ -2577,7 +2509,7 @@ function decodeInstruction(
     // eb
     // jmp Direct within segment short
     case 0b1110_1011: {
-      const ip = decodeIntLiteralData(instructionBytes, indexRef, 0);
+      const ip = decodeIntLiteralData(context, 0);
 
       instruction = {
         kind: 'jmpDirectWithinSegmentShort',
@@ -2612,14 +2544,16 @@ function decodeInstruction(
       break;
     }
 
+    // f0
+
     default:
       instruction = { kind: 'UNKNOWN' };
   }
 
-  indexRef.index++;
+  context.index++;
 
   // If we got here without consuming the segment register prefix, something went very wrong!
-  if (segmentOverridePrefixRef.segReg !== undefined) {
+  if (context.segmentOverridePrefix !== undefined) {
     throw Error('Unconsumed segment register prefix');
   }
 
@@ -2627,14 +2561,12 @@ function decodeInstruction(
 }
 
 function decodeDestSourceForModRegRmInstruction(
-  instructionBytes: InstructionBytes,
-  indexRef: IndexRef,
-  segmentOverridePrefixRef: SegmentOverridePrefixRef,
+  context: DecodingContext,
 ): [RegisterOrEac, RegisterOrEac] {
-  const dBit = instructionBytes[indexRef.index] & 0b0000_0010;
-  const wBit = instructionBytes[indexRef.index] & 0b0000_0001;
+  const dBit = context.instructionBytes[context.index] & 0b0000_0010;
+  const wBit = context.instructionBytes[context.index] & 0b0000_0001;
 
-  const [reg, rm] = decodeModRegRm(instructionBytes, indexRef, wBit);
+  const [reg, rm] = decodeModRegRm(context, wBit);
 
   const destRm = dBit ? reg : rm;
   const sourceRm = dBit ? rm : reg;
@@ -2646,21 +2578,11 @@ function decodeDestSourceForModRegRmInstruction(
     assertIsRegister(sourceRm);
     source = sourceRm;
 
-    dest = decodeEffectiveAddressCalculation(
-      instructionBytes,
-      indexRef,
-      destRm,
-      segmentOverridePrefixRef,
-    );
+    dest = decodeEffectiveAddressCalculation(context, destRm);
   } else if (sourceRm.kind === 'eac') {
     dest = destRm;
 
-    source = decodeEffectiveAddressCalculation(
-      instructionBytes,
-      indexRef,
-      sourceRm,
-      segmentOverridePrefixRef,
-    );
+    source = decodeEffectiveAddressCalculation(context, sourceRm);
   } else {
     dest = destRm;
     source = sourceRm;
@@ -2673,16 +2595,8 @@ function decodeDestSourceForModRegRmInstruction(
 //                               |  mod  |    reg    |     rm    |
 //
 // wBit is in bit index 7
-function decodeModRegRm(
-  instructionBytes: InstructionBytes,
-  indexRef: IndexRef,
-  wBit: number,
-): [Register, RegisterOrEacCategory] {
-  const [regBits, registerOrEacCategory] = decodeMiddleThreeBitsAndModRm(
-    instructionBytes,
-    indexRef,
-    wBit,
-  );
+function decodeModRegRm(context: DecodingContext, wBit: number): [Register, RegisterOrEacCategory] {
+  const [regBits, registerOrEacCategory] = decodeMiddleThreeBitsAndModRm(context, wBit);
 
   // reg bits are index 2, 3, 4. Shift them over 2 and & them with the wBit (last) to get a number in the range 0..16,
   // which is effectively table 4-9
@@ -2693,11 +2607,10 @@ function decodeModRegRm(
 }
 
 function decodeMiddleThreeBitsAndModRm(
-  instructionBytes: InstructionBytes,
-  indexRef: IndexRef,
+  context: DecodingContext,
   wBit: number,
 ): [number, RegisterOrEacCategory] {
-  const byte = instructionBytes[++indexRef.index];
+  const byte = context.instructionBytes[++context.index];
 
   // mod bits are the first two - 11 means that the "register or memory" part is a register,
   // else we'll find an effective address calculation category
@@ -2725,51 +2638,43 @@ function assertIsRegister(rm: RegisterOrEacCategory): asserts rm is Register {
 }
 
 function decodeRegisterOrEffectiveAddressCalculation(
-  instructionBytes: InstructionBytes,
-  indexRef: IndexRef,
+  context: DecodingContext,
   registerOrEacCategory: RegisterOrEacCategory,
-  segmentOverridePrefixRef: SegmentOverridePrefixRef,
 ): RegisterOrEac {
   if (registerOrEacCategory.kind === 'reg') {
     return registerOrEacCategory;
   } else {
-    return decodeEffectiveAddressCalculation(
-      instructionBytes,
-      indexRef,
-      registerOrEacCategory,
-      segmentOverridePrefixRef,
-    );
+    return decodeEffectiveAddressCalculation(context, registerOrEacCategory);
   }
 }
 
 // possibleDisplacementBytes could possible be undefined if we're reading the last instruction.
 // But in a valid instruction stream we should never have displacement that reads into those bytes, obv
 function decodeEffectiveAddressCalculation(
-  instructionBytes: InstructionBytes,
-  indexRef: IndexRef,
+  context: DecodingContext,
   category: EffectiveAddressCalculationCategory,
-  segmentOverridePrefixRef: SegmentOverridePrefixRef,
 ): EffectiveAddressCalculation {
   let displacement: number | null;
 
   if (category.displacementBytes === 0) {
     displacement = null;
   } else if (category.displacementBytes === 1) {
-    displacement = getAsTwosComplement(instructionBytes[indexRef.index + 1], 128);
+    displacement = getAsTwosComplement(context.instructionBytes[context.index + 1], 128);
   } else {
     displacement = getAsTwosComplement(
-      instructionBytes[indexRef.index + 1] + (instructionBytes[indexRef.index + 2] << 8),
+      context.instructionBytes[context.index + 1] +
+        (context.instructionBytes[context.index + 2] << 8),
       32768,
     );
   }
 
-  indexRef.index += category.displacementBytes;
+  context.index += category.displacementBytes;
 
   let segmentOverridePrefix: SegmentRegister | undefined = undefined;
-  if (segmentOverridePrefixRef.segReg !== undefined) {
-    segmentOverridePrefix = segmentOverridePrefixRef.segReg;
+  if (context.segmentOverridePrefix !== undefined) {
+    segmentOverridePrefix = context.segmentOverridePrefix;
 
-    segmentOverridePrefixRef.segReg = undefined;
+    context.segmentOverridePrefix = undefined;
   }
 
   return { kind: 'mem', text: category.text, displacement, segmentOverridePrefix };
@@ -2784,30 +2689,27 @@ function getAsTwosComplement(val: number, max: 128 | 32768): number {
 }
 
 function decodeDestDataForImmediateToAccumulatorInstruction(
-  instructionBytes: InstructionBytes,
-  indexRef: IndexRef,
+  context: DecodingContext,
 ): [AccumulatorRegister, number] {
-  const wBit = instructionBytes[indexRef.index] & 0b0000_0001;
+  const wBit = context.instructionBytes[context.index] & 0b0000_0001;
 
-  const data = decodeIntLiteralData(instructionBytes, indexRef, wBit);
+  const data = decodeIntLiteralData(context, wBit);
 
   const dest = wBit ? axReg : alReg;
 
   return [dest, data];
 }
 
-function decodeIntLiteralData(
-  instructionBytes: InstructionBytes,
-  indexRef: IndexRef,
-  wBit: number,
-): number {
+function decodeIntLiteralData(context: DecodingContext, wBit: number): number {
   if (wBit === 0) {
-    indexRef.index++;
+    context.index++;
 
-    return instructionBytes[indexRef.index];
+    return context.instructionBytes[context.index];
   } else {
-    indexRef.index += 2;
+    context.index += 2;
 
-    return instructionBytes[indexRef.index - 1] + (instructionBytes[indexRef.index] << 8);
+    return (
+      context.instructionBytes[context.index - 1] + (context.instructionBytes[context.index] << 8)
+    );
   }
 }
