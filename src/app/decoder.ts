@@ -391,11 +391,13 @@ export interface MovMemoryToFromAccumulatorInstruction {
 export interface MovsInstruction {
   readonly kind: 'movs';
   readonly word: boolean;
+  readonly rep?: RepPrefix;
 }
 
 export interface CmpsInstruction {
   readonly kind: 'cmps';
   readonly word: boolean;
+  readonly rep?: RepPrefix;
 }
 
 export interface TestImmediateWithAccumulatorInstruction {
@@ -407,16 +409,19 @@ export interface TestImmediateWithAccumulatorInstruction {
 export interface StosInstruction {
   readonly kind: 'stos';
   readonly word: boolean;
+  readonly rep?: RepPrefix;
 }
 
 export interface LodsInstruction {
   readonly kind: 'lods';
   readonly word: boolean;
+  readonly rep?: RepPrefix;
 }
 
 export interface ScasInstruction {
   readonly kind: 'scas';
   readonly word: boolean;
+  readonly rep?: RepPrefix;
 }
 
 export interface MovImmediateToRegisterInstruction {
@@ -601,6 +606,111 @@ export interface OutVariablePortInstruction {
   readonly dest: AccumulatorRegister;
 }
 
+export interface HltHaltInstruction {
+  readonly kind: 'hltHalt';
+}
+
+export interface CmcComplementCarryInstruction {
+  readonly kind: 'cmcComplementCarry';
+}
+
+export interface TestImmediateDataAndRegisterMemoryInstruction {
+  readonly kind: 'testImmediateDataAndRegisterMemory';
+  readonly dest: RegisterOrEac;
+  readonly data: number;
+}
+
+export interface NotInvertInstruction {
+  readonly kind: 'notInvert';
+  readonly dest: RegisterOrEac;
+}
+
+export interface NegChangeSignInstruction {
+  readonly kind: 'negChangeSign';
+  readonly dest: RegisterOrEac;
+}
+
+export interface MulMultipleUnsignedInstruction {
+  readonly kind: 'mulMultipleUnsigned';
+  readonly dest: RegisterOrEac;
+}
+
+export interface IMulIntegerMultiplySignedInstruction {
+  readonly kind: 'iMulIntegerMultiplySigned';
+  readonly dest: RegisterOrEac;
+}
+
+export interface DivDivideUnsignedInstruction {
+  readonly kind: 'divDivideUnsigned';
+  readonly dest: RegisterOrEac;
+}
+
+export interface IDivIntegerDivideSignedInstruction {
+  readonly kind: 'iDivIntegerDivideSigned';
+  readonly dest: RegisterOrEac;
+}
+
+export interface ClcClearCarryInstruction {
+  readonly kind: 'clcClearCarry';
+}
+
+export interface StcSetCarryInstruction {
+  readonly kind: 'stcSetCarry';
+}
+
+export interface CliClearInterruptInstruction {
+  readonly kind: 'cliClearInterrupt';
+}
+
+export interface StiSetInterruptInstruction {
+  readonly kind: 'stiSetInterrupt';
+}
+
+export interface CldClearDirectionInstruction {
+  readonly kind: 'cldClearDirection';
+}
+
+export interface StdSetDirectionInstruction {
+  readonly kind: 'stdSetDirection';
+}
+
+export interface IncRegisterMemoryInstruction {
+  readonly kind: 'incRegisterMemory';
+  readonly dest: RegisterOrEac;
+}
+
+export interface DecRegisterMemoryInstruction {
+  readonly kind: 'decRegisterMemory';
+  readonly dest: RegisterOrEac;
+}
+
+export interface CallIndirectWithinSegmentInstruction {
+  readonly kind: 'callIndirectWithinSegment';
+  readonly dest: RegisterOrEac;
+}
+
+export interface CallIndirectIntersegmentInstruction {
+  readonly kind: 'callIndirectIntersegment';
+  readonly dest: EffectiveAddressCalculation;
+}
+
+export interface JmpIndirectWithinSegmentInstruction {
+  readonly kind: 'jmpIndirectWithinSegment';
+  readonly dest: RegisterOrEac;
+}
+
+export interface JmpIndirectIntersegmentInstruction {
+  readonly kind: 'jmpIndirectIntersegment';
+  readonly dest: EffectiveAddressCalculation;
+}
+
+export interface PushRegisterMemoryInstruction {
+  readonly kind: 'pushRegisterMemory';
+  // Table 4-35 says MEM16 only, but 4-12 calls it Push register/memory,
+  // and the equivalent pop instruction is register/memory, so...
+  readonly dest: RegisterOrEac;
+}
+
 export interface UnknownInstruction {
   readonly kind: 'UNKNOWN';
 }
@@ -628,7 +738,7 @@ type ShortLabelJumpInstruction =
   | JumpOnNotGreaterInstruction
   | JumpOnGreaterInstruction;
 
-type StandardArithmeticLogicImmediateToRegisterMemoryInstruction =
+type ArithmeticLogicImmediateToRegisterMemoryInstruction =
   | AddImmediateToRegisterMemoryInstruction
   | OrImmediateToRegisterMemoryInstruction
   | AdcImmediateToRegisterMemoryInstruction
@@ -638,7 +748,7 @@ type StandardArithmeticLogicImmediateToRegisterMemoryInstruction =
   | XorImmediateToRegisterMemoryInstruction
   | CmpImmediateToRegisterMemoryInstruction;
 
-type StandardLogicWithOneOrClInstruction =
+type LogicWithOneOrClInstruction =
   | RolRotateLeftInstruction
   | RorRotateRightInstruction
   | RclRotateThroughCarryFlagLeftInstruction
@@ -652,6 +762,23 @@ type LoopOrJumpCxInstuction =
   | LoopeLoopWhileEqualInstruction
   | LoopLoopCxTimesInstruction
   | JcxzJumpOnCxZeroInstruction;
+
+type SingleOperandMathInstruction =
+  | NotInvertInstruction
+  | NegChangeSignInstruction
+  | MulMultipleUnsignedInstruction
+  | IMulIntegerMultiplySignedInstruction
+  | DivDivideUnsignedInstruction
+  | IDivIntegerDivideSignedInstruction;
+
+type MiscFfByteInstruction =
+  | IncRegisterMemoryInstruction
+  | DecRegisterMemoryInstruction
+  | CallIndirectWithinSegmentInstruction
+  | CallIndirectIntersegmentInstruction
+  | JmpIndirectWithinSegmentInstruction
+  | JmpIndirectIntersegmentInstruction
+  | PushRegisterMemoryInstruction;
 
 export type DecodedInstruction =
   | AddRegisterMemoryWithRegisterToEitherInstruction
@@ -681,7 +808,7 @@ export type DecodedInstruction =
   | PushRegisterInstruction
   | PopRegisterInstruction
   | ShortLabelJumpInstruction
-  | StandardArithmeticLogicImmediateToRegisterMemoryInstruction
+  | ArithmeticLogicImmediateToRegisterMemoryInstruction
   | TestRegisterMemoryAndRegisterInstruction
   | XchgRegisterMemoryWithRegisterInstruction
   | MovRegisterMemoryToFromRegisterInstruction
@@ -717,7 +844,7 @@ export type DecodedInstruction =
   | IntTypeSpecifiedInstruction
   | IntoInterruptOnOverflowInstruction
   | IretInterruptReturnInstruction
-  | StandardLogicWithOneOrClInstruction
+  | LogicWithOneOrClInstruction
   | AamAsciiAdjustForMultipleInstruction
   | AadAsciiAdjustForDivideInstruction
   | XlatTranslateByteToAlInstruction
@@ -731,6 +858,17 @@ export type DecodedInstruction =
   | JmpDirectWithinSegmentShortInstruction
   | OutVariablePortInstruction
   | InVariablePortInstruction
+  | HltHaltInstruction
+  | CmcComplementCarryInstruction
+  | TestImmediateDataAndRegisterMemoryInstruction
+  | SingleOperandMathInstruction
+  | ClcClearCarryInstruction
+  | StcSetCarryInstruction
+  | CliClearInterruptInstruction
+  | StiSetInterruptInstruction
+  | CldClearDirectionInstruction
+  | StdSetDirectionInstruction
+  | MiscFfByteInstruction
   | NotUsedInstruction
   | UnknownInstruction;
 
@@ -956,7 +1094,7 @@ const shortLabelJumpInstructionTable: ReadonlyArray<ShortLabelJumpInstruction['k
 ];
 
 const standardArithmeticLogicImmediateToRegisterMemoryInstructionTable: ReadonlyArray<
-  StandardArithmeticLogicImmediateToRegisterMemoryInstruction['kind']
+  ArithmeticLogicImmediateToRegisterMemoryInstruction['kind']
 > = [
   // 000
   'addImmediateToRegisterMemory',
@@ -988,7 +1126,7 @@ const segmentRegisterTable: ReadonlyArray<SegmentRegister> = [
 ];
 
 const standardLogicWithOneOrClInstructionTable: ReadonlyArray<
-  StandardLogicWithOneOrClInstruction['kind'] | NotUsedInstruction['kind']
+  LogicWithOneOrClInstruction['kind'] | NotUsedInstruction['kind']
 > = [
   // 000
   'rolRotateLeft',
@@ -1019,6 +1157,50 @@ const loopOrJumpCxInstructionTable: ReadonlyArray<LoopOrJumpCxInstuction['kind']
   'jcxzJumpOnCxZero',
 ];
 
+const singleOperandMathInstructionTable: ReadonlyArray<
+  SingleOperandMathInstruction['kind'] | NotUsedInstruction['kind']
+> = [
+  // 000
+  'NOT USED',
+  // 001
+  'NOT USED',
+  // 010
+  'notInvert',
+  // 011
+  'negChangeSign',
+  // 100
+  'mulMultipleUnsigned',
+  // 101
+  'iMulIntegerMultiplySigned',
+  // 110
+  'divDivideUnsigned',
+  // 111
+  'iDivIntegerDivideSigned',
+];
+
+const miscFfByteInstructionTable: ReadonlyArray<
+  MiscFfByteInstruction['kind'] | NotUsedInstruction['kind']
+> = [
+  // 000
+  'incRegisterMemory',
+  // 001
+  'decRegisterMemory',
+  // 010
+  'callIndirectWithinSegment',
+  // 011
+  'callIndirectIntersegment',
+  // 100
+  'jmpIndirectWithinSegment',
+  // 101
+  'jmpIndirectIntersegment',
+  // 110
+  'pushRegisterMemory',
+  // 111
+  'NOT USED',
+];
+
+type RepPrefix = 'rep' | 'repne';
+
 class DecodingContext {
   index = 0;
 
@@ -1048,6 +1230,20 @@ class DecodingContext {
 
   get lock(): boolean {
     return this._lock;
+  }
+
+  private _rep?: RepPrefix;
+
+  set rep(val: RepPrefix | undefined) {
+    if (val !== undefined && this._rep !== undefined) {
+      throw Error('Attempted to set rep context when already set!');
+    }
+
+    this._rep = val;
+  }
+
+  get rep(): RepPrefix | undefined {
+    return this._rep;
   }
 
   constructor(public readonly instructionBytes: InstructionBytes) {}
@@ -1084,23 +1280,6 @@ export function decodeInstructionsAndByteIndices(
   }
 
   return instructions;
-}
-
-function consumeLockPrefix(context: DecodingContext, dest: RegisterOrEac): boolean {
-  // I went off this random page, which is for ia-32
-  // It says we can lock xchg, add, or, adc, sbb, and, sub, xor, not, neg, inc, dec
-  // It also lists instructions that aren't on the 8086,
-  // and seems to say we can only lock when dest is mem, except for xchg
-  // TODO actually find this in the
-  if (dest.kind === 'reg' && context.lock) {
-    throw Error('This instruction is not lockable');
-  }
-
-  const value = context.lock;
-
-  context.lock = false;
-
-  return value;
 }
 
 function decodeInstruction(context: DecodingContext): DecodedInstruction {
@@ -2043,6 +2222,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
       instruction = {
         kind: 'movs',
         word: !!(firstByte & 0b0000_0001),
+        rep: consumeRepPrefix(context),
       };
 
       break;
@@ -2055,6 +2235,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
       instruction = {
         kind: 'cmps',
         word: !!(firstByte & 0b0000_0001),
+        rep: consumeRepPrefix(context),
       };
 
       break;
@@ -2088,6 +2269,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
       instruction = {
         kind: 'stos',
         word: !!(firstByte & 0b0000_0001),
+        rep: consumeRepPrefix(context),
       };
 
       break;
@@ -2100,6 +2282,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
       instruction = {
         kind: 'lods',
         word: !!(firstByte & 0b0000_0001),
+        rep: consumeRepPrefix(context),
       };
 
       break;
@@ -2112,6 +2295,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
       instruction = {
         kind: 'scas',
         word: !!(firstByte & 0b0000_0001),
+        rep: consumeRepPrefix(context),
       };
 
       break;
@@ -2333,9 +2517,9 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       const dest = decodeRegisterOrEffectiveAddressCalculation(context, destRm);
 
-      const source: StandardLogicWithOneOrClInstruction['source'] = vBit ? clReg : 1;
+      const source: LogicWithOneOrClInstruction['source'] = vBit ? clReg : 1;
 
-      const _instruction: StandardLogicWithOneOrClInstruction = {
+      const _instruction: LogicWithOneOrClInstruction = {
         kind: instructionKind,
         dest,
         source,
@@ -2545,6 +2729,209 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     }
 
     // f0
+    // lock prefix
+    // recurse (only 1 depth) and attach to the next instruction
+    case 0b1111_0000: {
+      context.lock = true;
+
+      context.index++;
+
+      return decodeInstruction(context);
+    }
+
+    // f1
+    // NOT USED
+    case 0b1111_0001: {
+      instruction = {
+        kind: 'NOT USED',
+        byte: firstByte,
+      };
+
+      break;
+    }
+
+    // f2
+    // repne prefix
+    // recurse (only 1 depth) and attach to the next instruction
+    case 0b1111_0010: {
+      context.rep = 'repne';
+
+      context.index++;
+
+      return decodeInstruction(context);
+    }
+
+    // f3
+    // rep prefix
+    // recurse (only 1 depth) and attach to the next instruction
+    case 0b1111_0011: {
+      context.rep = 'rep';
+
+      context.index++;
+
+      return decodeInstruction(context);
+    }
+
+    // f4
+    // hlt Halt
+    case 0b1111_0100: {
+      instruction = {
+        kind: 'hltHalt',
+      };
+
+      break;
+    }
+
+    // f5
+    // cmc Complement carry
+    case 0b1111_0101: {
+      instruction = {
+        kind: 'cmcComplementCarry',
+      };
+
+      break;
+    }
+
+    // f6 - f7
+    // test or single register math instruction
+    // Layout 1111 011w
+    case 0b1111_0110:
+    case 0b1111_0111: {
+      const wBit = firstByte & 0b0000_0001;
+
+      const [opCodeBits, destRm] = decodeMiddleThreeBitsAndModRm(context, wBit);
+
+      const dest = decodeRegisterOrEffectiveAddressCalculation(context, destRm);
+
+      // test Immediate data and register/memory
+      if (opCodeBits === 0b0000_0000) {
+        const data = decodeIntLiteralData(context, wBit);
+
+        instruction = {
+          kind: 'testImmediateDataAndRegisterMemory',
+          dest,
+          data,
+        };
+
+        break;
+      } else {
+        const instructionKind = singleOperandMathInstructionTable[opCodeBits >> 3];
+
+        if (instructionKind === 'NOT USED') {
+          throw Error(
+            'Got "single operand math instruction" with "reg" middle bits 001 in second byte',
+          );
+        }
+
+        instruction = {
+          kind: instructionKind,
+          dest,
+        };
+
+        break;
+      }
+    }
+
+    // f8
+    // clc Clear carry
+    case 0b1111_1000: {
+      instruction = {
+        kind: 'clcClearCarry',
+      };
+
+      break;
+    }
+
+    // f9
+    // stc Set carry
+    case 0b1111_1001: {
+      instruction = {
+        kind: 'stcSetCarry',
+      };
+
+      break;
+    }
+
+    // fa
+    // cli Clear interrupt
+    case 0b1111_1010: {
+      instruction = {
+        kind: 'cliClearInterrupt',
+      };
+
+      break;
+    }
+
+    // fb
+    // sti Set interrupt
+    case 0b1111_1011: {
+      instruction = {
+        kind: 'stiSetInterrupt',
+      };
+
+      break;
+    }
+
+    // fc
+    // cld Clear direction
+    case 0b1111_1100: {
+      instruction = {
+        kind: 'cldClearDirection',
+      };
+
+      break;
+    }
+
+    // fd
+    // std Set direction
+    case 0b1111_1101: {
+      instruction = {
+        kind: 'stdSetDirection',
+      };
+
+      break;
+    }
+
+    // fe - ff
+    // Various (inc, dec, call, jmp, push)
+    case 0b1111_1110:
+    case 0b1111_1111: {
+      const wBit = firstByte & 0b0000_0001;
+
+      const [opCodeBits, destRm] = decodeMiddleThreeBitsAndModRm(context, wBit);
+
+      const dest = decodeRegisterOrEffectiveAddressCalculation(context, destRm);
+
+      const instructionKind = miscFfByteInstructionTable[opCodeBits >> 3];
+
+      if (!wBit && opCodeBits !== 0b0000_0000 && opCodeBits !== 0b0000_1000) {
+        throw Error('Got first byte 1111 1110 with invalid "reg" middle bits (not 000 or 001)');
+      } else if (instructionKind === 'NOT USED') {
+        throw Error('Got first byte 1111 111w with "reg" middle bits 111 in second byte');
+      }
+
+      // These appear to be legit only allowed with registers
+      if (
+        instructionKind === 'callIndirectIntersegment' ||
+        instructionKind === 'jmpIndirectIntersegment'
+      ) {
+        if (dest.kind === 'reg') {
+          throw Error('Got register operand with call or jmp direct intersegment');
+        }
+
+        instruction = {
+          kind: instructionKind,
+          dest,
+        };
+      } else {
+        instruction = {
+          kind: instructionKind,
+          dest,
+        };
+      }
+
+      break;
+    }
 
     default:
       instruction = { kind: 'UNKNOWN' };
@@ -2555,6 +2942,14 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
   // If we got here without consuming the segment register prefix, something went very wrong!
   if (context.segmentOverridePrefix !== undefined) {
     throw Error('Unconsumed segment register prefix');
+  }
+
+  if (context.lock) {
+    throw Error('Unconsumed lock - This instruction is not lockable');
+  }
+
+  if (context.rep !== undefined) {
+    throw Error('Unconsumed rep - This instruction is not rep-able');
   }
 
   return instruction;
@@ -2712,4 +3107,29 @@ function decodeIntLiteralData(context: DecodingContext, wBit: number): number {
       context.instructionBytes[context.index - 1] + (context.instructionBytes[context.index] << 8)
     );
   }
+}
+
+function consumeLockPrefix(context: DecodingContext, dest: RegisterOrEac): boolean {
+  // I went off this random page, which is for ia-32
+  // It says we can lock xchg, add, or, adc, sbb, and, sub, xor, not, neg, inc, dec
+  // It also lists instructions that aren't on the 8086,
+  // and seems to say we can only lock when dest is mem, except for xchg
+  // TODO actually find this in the
+  if (dest.kind === 'reg' && context.lock) {
+    throw Error('This instruction is not lockable');
+  }
+
+  const value = context.lock;
+
+  context.lock = false;
+
+  return value;
+}
+
+function consumeRepPrefix(context: DecodingContext): RepPrefix | undefined {
+  const value = context.rep;
+
+  context.rep = undefined;
+
+  return value;
 }
