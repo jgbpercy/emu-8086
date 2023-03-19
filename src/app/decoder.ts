@@ -13,730 +13,620 @@
 
 // TODO consolidate thrown Errors/Not Used/Unknown into coherent error handling that outputs what went wrong
 
-export interface AddRegisterMemoryWithRegisterToEitherInstruction {
-  readonly kind: 'addRegisterMemoryWithRegisterToEither';
-  readonly dest: RegisterOrEac;
-  readonly source: RegisterOrEac;
+export type Operand = Register | SegmentRegister | EffectiveAddressCalculation | number;
+
+interface _NoOperandInstruction<TKind extends string> {
+  readonly kind: TKind;
+}
+
+type _OneOperandInstruction<
+  TKind extends string,
+  TOp1 extends Operand,
+> = _NoOperandInstruction<TKind> & {
+  readonly op1: TOp1;
+};
+
+type _TwoOperandInstruction<
+  TKind extends string,
+  TOp1 extends Operand,
+  TOp2 extends Operand,
+> = _OneOperandInstruction<TKind, TOp1> & {
+  readonly op2: TOp2;
+};
+
+interface _Lockable {
   readonly lock: boolean;
 }
 
-export interface AddImmediateToAccumulatorInstruction {
-  readonly kind: 'addImmediateToAccumulator';
-  readonly dest: AccumulatorRegister;
-  readonly data: number;
+interface _Repable {
+  readonly rep: RepPrefix | null;
 }
 
-export interface PushSegmentRegisterInstruction {
-  readonly kind: 'pushSegmentRegister';
-  readonly register: SegmentRegister;
-}
-
-export interface PopSegmentRegisterInstructions {
-  readonly kind: 'popSegmentRegister';
-  readonly register: Exclude<SegmentRegister, 'cs'>;
-}
-
-export interface OrRegisterMemoryAndRegisterToEitherInstruction {
-  readonly kind: 'orRegisterMemoryAndRegisterToEither';
-  readonly dest: RegisterOrEac;
-  readonly source: RegisterOrEac;
-  readonly lock: boolean;
-}
-
-export interface OrImmediateToAccumulatorInstruction {
-  readonly kind: 'orImmediateToAccumulator';
-  readonly dest: AccumulatorRegister;
-  readonly data: number;
-}
-
-export interface AdcRegisterMemoryWithRegisterToEitherInstruction {
-  readonly kind: 'adcRegisterMemoryWithRegisterToEither';
-  readonly dest: RegisterOrEac;
-  readonly source: RegisterOrEac;
-  readonly lock: boolean;
-}
-
-export interface AdcImmediateToAccumulatorInstruction {
-  readonly kind: 'adcImmediateToAccumulator';
-  readonly dest: AccumulatorRegister;
-  readonly data: number;
-}
-
-export interface SbbRegisterMemoryAndRegisterToEitherInstruction {
-  readonly kind: 'sbbRegisterMemoryAndRegisterToEither';
-  readonly dest: RegisterOrEac;
-  readonly source: RegisterOrEac;
-  readonly lock: boolean;
-}
-
-export interface SbbImmediateFromAccumulatorInstruction {
-  readonly kind: 'sbbImmediateFromAccumulator';
-  readonly dest: AccumulatorRegister;
-  readonly data: number;
-}
-
-export interface AndRegisterMemoryWithRegisterToEitherInstruction {
-  readonly kind: 'andRegisterMemoryWithRegisterToEither';
-  readonly dest: RegisterOrEac;
-  readonly source: RegisterOrEac;
-  readonly lock: boolean;
-}
-
-export interface AndImmediateToAccumulatorInstruction {
-  readonly kind: 'andImmediateToAccumulator';
-  readonly dest: AccumulatorRegister;
-  readonly data: number;
-}
-
-export interface DecimalAdjustForAddInstruction {
-  readonly kind: 'decimalAdjustForAdd';
-}
-
-export interface SubRegisterMemoryAndRegisterToEitherInstruction {
-  readonly kind: 'subRegisterMemoryAndRegisterToEither';
-  readonly dest: RegisterOrEac;
-  readonly source: RegisterOrEac;
-  readonly lock: boolean;
-}
-
-export interface SubImmediateFromAccumulatorInstruction {
-  readonly kind: 'subImmediateFromAccumulator';
-  readonly dest: AccumulatorRegister;
-  readonly data: number;
-}
-
-export interface DecimalAdjustForSubtractInstruction {
-  readonly kind: 'decimalAdjustForSubtract';
-}
-
-export interface XorRegisterMemoryAndRegisterToEitherInstruction {
-  readonly kind: 'xorRegisterMemoryAndRegisterToEither';
-  readonly dest: RegisterOrEac;
-  readonly source: RegisterOrEac;
-  readonly lock: boolean;
-}
-
-export interface XorImmediateToAccumulatorInstruction {
-  readonly kind: 'xorImmediateToAccumulator';
-  readonly dest: AccumulatorRegister;
-  readonly data: number;
-}
-
-export interface AsciiAdjustForAddInstruction {
-  readonly kind: 'asciiAdjustForAdd';
-}
-
-export interface CmpRegisterMemoryAndRegisterInstruction {
-  readonly kind: 'cmpRegisterMemoryAndRegister';
-  readonly dest: RegisterOrEac;
-  readonly source: RegisterOrEac;
-}
-
-export interface CmpImmediateWithAccumulatorInstruction {
-  readonly kind: 'cmpImmediateWithAccumulator';
-  readonly dest: AccumulatorRegister;
-  readonly data: number;
-}
-
-export interface AsciiAdjustForSubtractInstruction {
-  readonly kind: 'asciiAdjustForSubtract';
-}
-
-export interface IncRegisterInstruction {
-  readonly kind: 'incRegister';
-  readonly register: WordRegister;
-}
-
-export interface DecRegisterInstruction {
-  readonly kind: 'decRegister';
-  readonly register: WordRegister;
-}
-
-export interface PushRegisterInstruction {
-  readonly kind: 'pushRegister';
-  readonly register: WordRegister;
-}
-
-export interface PopRegisterInstruction {
-  readonly kind: 'popRegister';
-  readonly register: WordRegister;
-}
-
-export interface JumpOnOverflowInstruction {
-  readonly kind: 'jumpOnOverflow';
-  readonly signedIncrement: number;
-}
-
-export interface JumpOnNotOverflowInstruction {
-  readonly kind: 'jumpOnNotOverflow';
-  readonly signedIncrement: number;
-}
-
-export interface JumpOnBelowInstruction {
-  readonly kind: 'jumpOnBelow';
-  readonly signedIncrement: number;
-}
-
-export interface JumpOnNotBelowInstruction {
-  readonly kind: 'jumpOnNotBelow';
-  readonly signedIncrement: number;
-}
-
-export interface JumpOnEqualInstruction {
-  readonly kind: 'jumpOnEqual';
-  readonly signedIncrement: number;
-}
-
-export interface JumpOnNotEqualInstruction {
-  readonly kind: 'jumpOnNotEqual';
-  readonly signedIncrement: number;
-}
-
-export interface JumpOnNotAboveInstruction {
-  readonly kind: 'jumpOnNotAbove';
-  readonly signedIncrement: number;
-}
-
-export interface JumpOnAboveInstruction {
-  readonly kind: 'jumpOnAbove';
-  readonly signedIncrement: number;
-}
-
-export interface JumpOnSignInstruction {
-  readonly kind: 'jumpOnSign';
-  readonly signedIncrement: number;
-}
-
-export interface JumpOnNotSignInstruction {
-  readonly kind: 'jumpOnNotSign';
-  readonly signedIncrement: number;
-}
-
-export interface JumpOnParityInstruction {
-  readonly kind: 'jumpOnParity';
-  readonly signedIncrement: number;
-}
-
-export interface JumpOnNotParityInstruction {
-  readonly kind: 'jumpOnNotParity';
-  readonly signedIncrement: number;
-}
-
-export interface JumpOnLessInstruction {
-  readonly kind: 'jumpOnLess';
-  readonly signedIncrement: number;
-}
-
-export interface JumpOnNotLessInstruction {
-  readonly kind: 'jumpOnNotLess';
-  readonly signedIncrement: number;
-}
-
-export interface JumpOnNotGreaterInstruction {
-  readonly kind: 'jumpOnNotGreater';
-  readonly signedIncrement: number;
-}
-
-export interface JumpOnGreaterInstruction {
-  readonly kind: 'jumpOnGreater';
-  readonly signedIncrement: number;
-}
-
-export interface AddImmediateToRegisterMemoryInstruction {
-  readonly kind: 'addImmediateToRegisterMemory';
-  readonly dest: RegisterOrEac;
-  readonly data: number;
-  readonly lock: boolean;
-}
-
-export interface OrImmediateToRegisterMemoryInstruction {
-  readonly kind: 'orImmediateToRegisterMemory';
-  readonly dest: RegisterOrEac;
-  readonly data: number;
-  readonly lock: boolean;
-}
-
-export interface AdcImmediateToRegisterMemoryInstruction {
-  readonly kind: 'adcImmediateToRegisterMemory';
-  readonly dest: RegisterOrEac;
-  readonly data: number;
-  readonly lock: boolean;
-}
-
-export interface SbbImmediateToRegisterMemoryInstruction {
-  readonly kind: 'sbbImmediateToRegisterMemory';
-  readonly dest: RegisterOrEac;
-  readonly data: number;
-  readonly lock: boolean;
-}
-
-export interface AndImmediateToRegisterMemoryInstruction {
-  readonly kind: 'andImmediateToRegisterMemory';
-  readonly dest: RegisterOrEac;
-  readonly data: number;
-  readonly lock: boolean;
-}
-
-export interface SubImmediateToRegisterMemoryInstruction {
-  readonly kind: 'subImmediateToRegisterMemory';
-  readonly dest: RegisterOrEac;
-  readonly data: number;
-  readonly lock: boolean;
-}
-
-export interface XorImmediateToRegisterMemoryInstruction {
-  readonly kind: 'xorImmediateToRegisterMemory';
-  readonly dest: RegisterOrEac;
-  readonly data: number;
-  readonly lock: boolean;
-}
-
-export interface CmpImmediateToRegisterMemoryInstruction {
-  readonly kind: 'cmpImmediateToRegisterMemory';
-  readonly dest: RegisterOrEac;
-  readonly data: number;
-}
-
-export interface TestRegisterMemoryAndRegisterInstruction {
-  readonly kind: 'testRegisterMemoryAndRegister';
-  readonly dest: RegisterOrEac;
-  readonly source: RegisterOrEac;
-}
-
-export interface XchgRegisterMemoryWithRegisterInstruction {
-  readonly kind: 'xchgRegisterMemoryWithRegister';
-  readonly dest: RegisterOrEac;
-  readonly source: RegisterOrEac;
-  readonly lock: boolean;
-}
-
-export interface MovRegisterMemoryToFromRegisterInstruction {
-  readonly kind: 'movRegisterMemoryToFromRegister';
-  readonly dest: RegisterOrEac;
-  readonly source: RegisterOrEac;
-}
-
-export interface MovSegmentRegisterToRegisterMemoryInstruction {
-  readonly kind: 'movSegmentRegisterToRegisterMemory';
-  readonly dest: RegisterOrEac;
-  readonly source: SegmentRegister;
-}
-
-export interface LeaLoadEaToRegisterInstruction {
-  readonly kind: 'leaLoadEaToRegister';
-  readonly dest: Register;
-  readonly source: EffectiveAddressCalculation;
-}
-
-export interface MovRegisterMemoryToSegmentRegisterInstruction {
-  readonly kind: 'movRegisterMemoryToSegmentRegister';
-  readonly dest: SegmentRegister;
-  readonly source: RegisterOrEac;
-}
-
-export interface PopRegisterMemoryInstruction {
-  readonly kind: 'popRegisterMemory';
-  readonly dest: RegisterOrEac;
-}
-
-export interface XchgRegisterWithAccumulatorInstruction {
-  readonly kind: 'xchgRegisterWithAccumulator';
-  readonly source: WordRegister;
-}
-
-export interface CbwConvertByteToWordInstruction {
-  readonly kind: 'cbwConvertByteToWord';
-}
-
-export interface CwdConvertWordToDoubleWordInstruction {
-  readonly kind: 'cwdConvertWordToDoubleWord';
-}
-
-export interface CallDirectIntersegmentInstruction {
-  readonly kind: 'callDirectIntersegment';
-  readonly ip: number;
-  readonly cs: number;
-}
-
-export interface WaitInstruction {
-  readonly kind: 'wait';
-}
-
-export interface PushfPushFlagsInstruction {
-  readonly kind: 'pushfPushFlags';
-}
-
-export interface PopfPopFlagsInstruction {
-  readonly kind: 'popfPopFlags';
-}
-
-export interface SahfStoreAhIntoFlagsInstruction {
-  readonly kind: 'sahfStoreAhIntoFlags';
-}
-
-export interface LahfLoadAhWithFlagsInstruction {
-  readonly kind: 'lahfLoadAhWithFlags';
-}
-
-export interface MovMemoryToFromAccumulatorInstruction {
-  readonly kind: 'movMemoryToFromAccumulator';
-  readonly dest:
-    | AccumulatorRegister
-    | { kind: 'mem'; text: 'DIRECT ADDRESS'; displacement: number };
-  readonly source:
-    | AccumulatorRegister
-    | { kind: 'mem'; text: 'DIRECT ADDRESS'; displacement: number };
-}
-
-export interface MovsInstruction {
-  readonly kind: 'movs';
+interface _TracksWord {
   readonly word: boolean;
-  readonly rep?: RepPrefix;
 }
 
-export interface CmpsInstruction {
-  readonly kind: 'cmps';
-  readonly word: boolean;
-  readonly rep?: RepPrefix;
-}
-
-export interface TestImmediateWithAccumulatorInstruction {
-  readonly kind: 'testImmediateWithAccumulator';
-  readonly dest: AccumulatorRegister;
-  readonly data: number;
-}
-
-export interface StosInstruction {
-  readonly kind: 'stos';
-  readonly word: boolean;
-  readonly rep?: RepPrefix;
-}
-
-export interface LodsInstruction {
-  readonly kind: 'lods';
-  readonly word: boolean;
-  readonly rep?: RepPrefix;
-}
-
-export interface ScasInstruction {
-  readonly kind: 'scas';
-  readonly word: boolean;
-  readonly rep?: RepPrefix;
-}
-
-export interface MovImmediateToRegisterInstruction {
-  readonly kind: 'movImmediateToRegister';
-  readonly dest: Register;
-  readonly data: number;
-}
-
-export interface RetWithinSegAddingImmedToSpInstruction {
-  readonly kind: 'retWithinSegAddingImmedToSp';
-  readonly data: number;
-}
-
-export interface RetWithinSegmentInstruction {
-  readonly kind: 'retWithinSegment';
-}
-
-export interface LesLoadPointerToEsInstruction {
-  readonly kind: 'lesLoadPointerToEs';
-  readonly dest: WordRegister;
-  readonly source: EffectiveAddressCalculation;
-}
-
-export interface LdsLoadPointerToDsInstruction {
-  readonly kind: 'ldsLoadPointerToDs';
-  readonly dest: WordRegister;
-  readonly source: EffectiveAddressCalculation;
-}
-
-export interface MovImmediateToRegisterMemoryInstruction {
-  readonly kind: 'movImmediateToRegisterMemory';
-  readonly dest: RegisterOrEac;
-  readonly data: number;
-}
-
-export interface RetIntersegmentAddingImmediateToSpInstruction {
-  readonly kind: 'retIntersegmentAddingImmediateToSp';
-  readonly data: number;
-}
+export type AddRegisterMemoryWithRegisterToEitherInstruction = _TwoOperandInstruction<
+  'addRegisterMemoryWithRegisterToEither',
+  RegisterOrEac,
+  RegisterOrEac
+> &
+  _Lockable;
+
+export type AddImmediateToAccumulatorInstruction = _TwoOperandInstruction<
+  'addImmediateToAccumulator',
+  AccumulatorRegister,
+  number
+>;
+
+export type PushSegmentRegisterInstruction = _OneOperandInstruction<
+  'pushSegmentRegister',
+  SegmentRegister
+>;
+
+export type PopSegmentRegisterInstructions = _OneOperandInstruction<
+  'popSegmentRegister',
+  Exclude<SegmentRegister, 'cs'>
+>;
+
+export type OrRegisterMemoryAndRegisterToEitherInstruction = _TwoOperandInstruction<
+  'orRegisterMemoryAndRegisterToEither',
+  RegisterOrEac,
+  RegisterOrEac
+> &
+  _Lockable;
+
+export type OrImmediateToAccumulatorInstruction = _TwoOperandInstruction<
+  'orImmediateToAccumulator',
+  AccumulatorRegister,
+  number
+>;
+
+export type AdcRegisterMemoryWithRegisterToEitherInstruction = _TwoOperandInstruction<
+  'adcRegisterMemoryWithRegisterToEither',
+  RegisterOrEac,
+  RegisterOrEac
+> &
+  _Lockable;
+
+export type AdcImmediateToAccumulatorInstruction = _TwoOperandInstruction<
+  'adcImmediateToAccumulator',
+  AccumulatorRegister,
+  number
+>;
+
+export type SbbRegisterMemoryAndRegisterToEitherInstruction = _TwoOperandInstruction<
+  'sbbRegisterMemoryAndRegisterToEither',
+  RegisterOrEac,
+  RegisterOrEac
+> &
+  _Lockable;
+
+export type SbbImmediateFromAccumulatorInstruction = _TwoOperandInstruction<
+  'sbbImmediateFromAccumulator',
+  AccumulatorRegister,
+  number
+>;
 
-export interface RetIntersegmentInstruction {
-  readonly kind: 'retIntersegment';
-}
+export type AndRegisterMemoryWithRegisterToEitherInstruction = _TwoOperandInstruction<
+  'andRegisterMemoryWithRegisterToEither',
+  RegisterOrEac,
+  RegisterOrEac
+> &
+  _Lockable;
 
-export interface IntType3Instruction {
-  readonly kind: 'intType3';
-}
+export type AndImmediateToAccumulatorInstruction = _TwoOperandInstruction<
+  'andImmediateToAccumulator',
+  AccumulatorRegister,
+  number
+>;
 
-export interface IntTypeSpecifiedInstruction {
-  readonly kind: 'intTypeSpecified';
-  readonly data: number;
-}
+export type DaaDecimalAdjustForAddInstruction = _NoOperandInstruction<'daaDecimalAdjustForAdd'>;
 
-export interface IntoInterruptOnOverflowInstruction {
-  readonly kind: 'intoInterruptOnOverflow';
-}
+export type SubRegisterMemoryAndRegisterToEitherInstruction = _TwoOperandInstruction<
+  'subRegisterMemoryAndRegisterToEither',
+  RegisterOrEac,
+  RegisterOrEac
+> &
+  _Lockable;
+
+export type SubImmediateFromAccumulatorInstruction = _TwoOperandInstruction<
+  'subImmediateFromAccumulator',
+  AccumulatorRegister,
+  number
+>;
+
+export type DasDecimalAdjustForSubtractInstruction =
+  _NoOperandInstruction<'dasDecimalAdjustForSubtract'>;
+
+export type XorRegisterMemoryAndRegisterToEitherInstruction = _TwoOperandInstruction<
+  'xorRegisterMemoryAndRegisterToEither',
+  RegisterOrEac,
+  RegisterOrEac
+> &
+  _Lockable;
 
-export interface IretInterruptReturnInstruction {
-  readonly kind: 'iretInterruptReturn';
-}
+export type XorImmediateToAccumulatorInstruction = _TwoOperandInstruction<
+  'xorImmediateToAccumulator',
+  AccumulatorRegister,
+  number
+>;
 
-export interface RolRotateLeftInstruction {
-  readonly kind: 'rolRotateLeft';
-  readonly dest: RegisterOrEac;
-  readonly source: 1 | typeof clReg;
-}
+export type AaaAsciiAdjustForAddInstruction = _NoOperandInstruction<'aaaAsciiAdjustForAdd'>;
 
-export interface RorRotateRightInstruction {
-  readonly kind: 'rorRotateRight';
-  readonly dest: RegisterOrEac;
-  readonly source: 1 | typeof clReg;
-}
+export type CmpRegisterMemoryAndRegisterInstruction = _TwoOperandInstruction<
+  'cmpRegisterMemoryAndRegister',
+  RegisterOrEac,
+  RegisterOrEac
+>;
 
-export interface RclRotateThroughCarryFlagLeftInstruction {
-  readonly kind: 'rclRotateThroughCarryFlagLeft';
-  readonly dest: RegisterOrEac;
-  readonly source: 1 | typeof clReg;
-}
+export type CmpImmediateWithAccumulatorInstruction = _TwoOperandInstruction<
+  'cmpImmediateWithAccumulator',
+  AccumulatorRegister,
+  number
+>;
 
-export interface RcrRotateThroughCarryRightInstruction {
-  readonly kind: 'rcrRotateThroughCarryRight';
-  readonly dest: RegisterOrEac;
-  readonly source: 1 | typeof clReg;
-}
+export type AasAsciiAdjustForSubtractInstruction =
+  _NoOperandInstruction<'aasAsciiAdjustForSubtract'>;
 
-export interface SalShiftLogicalArithmeticLeftInstruction {
-  readonly kind: 'salShiftLogicalArithmeticLeft';
-  readonly dest: RegisterOrEac;
-  readonly source: 1 | typeof clReg;
-}
+export type IncRegisterInstruction = _OneOperandInstruction<'incRegister', WordRegister>;
 
-export interface ShrShiftLogicalRightInstruction {
-  readonly kind: 'shrShiftLogicalRight';
-  readonly dest: RegisterOrEac;
-  readonly source: 1 | typeof clReg;
-}
+export type DecRegisterInstruction = _OneOperandInstruction<'decRegister', WordRegister>;
 
-export interface SarShiftArithmeticRightInstruction {
-  readonly kind: 'sarShiftArithmeticRight';
-  readonly dest: RegisterOrEac;
-  readonly source: 1 | typeof clReg;
-}
+export type PushRegisterInstruction = _OneOperandInstruction<'pushRegister', WordRegister>;
 
-export interface AamAsciiAdjustForMultipleInstruction {
-  readonly kind: 'aamAsciiAdjustForMultiply';
-}
+export type PopRegisterInstruction = _OneOperandInstruction<'popRegister', WordRegister>;
 
-export interface AadAsciiAdjustForDivideInstruction {
-  readonly kind: 'aadAsciiAdjustForDivide';
-}
+export type JoJumpOnOverflowInstruction = _OneOperandInstruction<'joJumpOnOverflow', number>;
 
-export interface XlatTranslateByteToAlInstruction {
-  readonly kind: 'xlatTranslateByteToAl';
-}
+export type JnoJumpOnNotOverflowInstruction = _OneOperandInstruction<
+  'jnoJumpOnNotOverflow',
+  number
+>;
 
-export interface EscEscapeToExternalDeviceInstruction {
-  readonly kind: 'escEscapeToExternalDevice';
-  readonly source: RegisterOrEac;
-  readonly data: number;
-}
+export type JbJumpOnBelowInstruction = _OneOperandInstruction<'jbJumpOnBelow', number>;
 
-export interface LoopneLoopWhileNotEqualInstruction {
-  readonly kind: 'loopneLoopWhileNotEqual';
-  readonly signedIncrement: number;
-}
+export type JnbJumpOnNotBelowInstruction = _OneOperandInstruction<'jnbJumpOnNotBelow', number>;
 
-export interface LoopeLoopWhileEqualInstruction {
-  readonly kind: 'loopeLoopWhileEqual';
-  readonly signedIncrement: number;
-}
+export type JeJumpOnEqualInstruction = _OneOperandInstruction<'jeJumpOnEqual', number>;
 
-export interface LoopLoopCxTimesInstruction {
-  readonly kind: 'loopLoopCxTimes';
-  readonly signedIncrement: number;
-}
+export type JneJumpOnNotEqualInstruction = _OneOperandInstruction<'jneJumpOnNotEqual', number>;
 
-export interface JcxzJumpOnCxZeroInstruction {
-  readonly kind: 'jcxzJumpOnCxZero';
-  readonly signedIncrement: number;
-}
+export type JnaJumpOnNotAboveInstruction = _OneOperandInstruction<'jnaJumpOnNotAbove', number>;
 
-export interface InFixedPortInstruction {
-  readonly kind: 'inFixedPort';
-  readonly dest: AccumulatorRegister;
-  readonly data: number;
-}
+export type JaJumpOnAboveInstruction = _OneOperandInstruction<'jaJumpOnAbove', number>;
 
-export interface OutFixedPortInstruction {
-  readonly kind: 'outFixedPort';
-  readonly dest: AccumulatorRegister;
-  readonly data: number;
-}
+export type JsJumpOnSignInstruction = _OneOperandInstruction<'jsJumpOnSign', number>;
+
+export type JnsJumpOnNotSignInstruction = _OneOperandInstruction<'jnsJumpOnNotSign', number>;
 
-export interface CallDirectWithinSegmentInstruction {
-  readonly kind: 'callDirectWithinSegment';
-  readonly ip: number;
-}
+export type JpJumpOnParityInstruction = _OneOperandInstruction<'jpJumpOnParity', number>;
+
+export type JnpJumpOnNotParityInstruction = _OneOperandInstruction<'jnpJumpOnNotParity', number>;
+
+export type JlJumpOnLessInstruction = _OneOperandInstruction<'jlJumpOnLess', number>;
+
+export type JnlJumpOnNotLessInstruction = _OneOperandInstruction<'jnlJumpOnNotLess', number>;
+
+export type JngJumpOnNotGreaterInstruction = _OneOperandInstruction<'jngJumpOnNotGreater', number>;
+
+export type JgJumpOnGreaterInstruction = _OneOperandInstruction<'jgJumpOnGreater', number>;
+
+export type AddImmediateToRegisterMemoryInstruction = _TwoOperandInstruction<
+  'addImmediateToRegisterMemory',
+  RegisterOrEac,
+  number
+> &
+  _Lockable;
+
+export type OrImmediateToRegisterMemoryInstruction = _TwoOperandInstruction<
+  'orImmediateToRegisterMemory',
+  RegisterOrEac,
+  number
+> &
+  _Lockable;
+
+export type AdcImmediateToRegisterMemoryInstruction = _TwoOperandInstruction<
+  'adcImmediateToRegisterMemory',
+  RegisterOrEac,
+  number
+> &
+  _Lockable;
 
-export interface JmpDirectWithinSegmentInstruction {
-  readonly kind: 'jmpDirectWithinSegment';
-  readonly ip: number;
-}
+export type SbbImmediateToRegisterMemoryInstruction = _TwoOperandInstruction<
+  'sbbImmediateToRegisterMemory',
+  RegisterOrEac,
+  number
+> &
+  _Lockable;
 
-export interface JmpDirectIntersegmentInstruction {
-  readonly kind: 'jmpDirectIntersegment';
-  readonly ip: number;
-  readonly cs: number;
-}
+export type AndImmediateToRegisterMemoryInstruction = _TwoOperandInstruction<
+  'andImmediateToRegisterMemory',
+  RegisterOrEac,
+  number
+> &
+  _Lockable;
 
-export interface JmpDirectWithinSegmentShortInstruction {
-  readonly kind: 'jmpDirectWithinSegmentShort';
-  readonly ip: number;
-}
+export type SubImmediateToRegisterMemoryInstruction = _TwoOperandInstruction<
+  'subImmediateToRegisterMemory',
+  RegisterOrEac,
+  number
+> &
+  _Lockable;
 
-export interface InVariablePortInstruction {
-  readonly kind: 'inVariablePort';
-  readonly dest: AccumulatorRegister;
-}
+export type XorImmediateToRegisterMemoryInstruction = _TwoOperandInstruction<
+  'xorImmediateToRegisterMemory',
+  RegisterOrEac,
+  number
+> &
+  _Lockable;
 
-export interface OutVariablePortInstruction {
-  readonly kind: 'outVariablePortInstruction';
-  readonly dest: AccumulatorRegister;
-}
+export type CmpImmediateToRegisterMemoryInstruction = _TwoOperandInstruction<
+  'cmpImmediateToRegisterMemory',
+  RegisterOrEac,
+  number
+>;
 
-export interface HltHaltInstruction {
-  readonly kind: 'hltHalt';
-}
+export type TestRegisterMemoryAndRegisterInstruction = _TwoOperandInstruction<
+  'testRegisterMemoryAndRegister',
+  RegisterOrEac,
+  RegisterOrEac
+>;
 
-export interface CmcComplementCarryInstruction {
-  readonly kind: 'cmcComplementCarry';
-}
+export type XchgRegisterMemoryWithRegisterInstruction = _TwoOperandInstruction<
+  'xchgRegisterMemoryWithRegister',
+  RegisterOrEac,
+  RegisterOrEac
+> &
+  _Lockable;
 
-export interface TestImmediateDataAndRegisterMemoryInstruction {
-  readonly kind: 'testImmediateDataAndRegisterMemory';
-  readonly dest: RegisterOrEac;
-  readonly data: number;
-}
+export type MovRegisterMemoryToFromRegisterInstruction = _TwoOperandInstruction<
+  'movRegisterMemoryToFromRegister',
+  RegisterOrEac,
+  RegisterOrEac
+>;
 
-export interface NotInvertInstruction {
-  readonly kind: 'notInvert';
-  readonly dest: RegisterOrEac;
-}
+export type MovSegmentRegisterToRegisterMemoryInstruction = _TwoOperandInstruction<
+  'movSegmentRegisterToRegisterMemory',
+  RegisterOrEac,
+  SegmentRegister
+>;
 
-export interface NegChangeSignInstruction {
-  readonly kind: 'negChangeSign';
-  readonly dest: RegisterOrEac;
-}
+export type LeaLoadEaToRegisterInstruction = _TwoOperandInstruction<
+  'leaLoadEaToRegister',
+  Register,
+  EffectiveAddressCalculation
+>;
+
+export type MovRegisterMemoryToSegmentRegisterInstruction = _TwoOperandInstruction<
+  'movRegisterMemoryToSegmentRegister',
+  SegmentRegister,
+  RegisterOrEac
+>;
 
-export interface MulMultipleUnsignedInstruction {
-  readonly kind: 'mulMultipleUnsigned';
-  readonly dest: RegisterOrEac;
-}
+export type PopRegisterMemoryInstruction = _OneOperandInstruction<
+  'popRegisterMemory',
+  RegisterOrEac
+>;
 
-export interface IMulIntegerMultiplySignedInstruction {
-  readonly kind: 'iMulIntegerMultiplySigned';
-  readonly dest: RegisterOrEac;
-}
+export type XchgRegisterWithAccumulatorInstruction = _OneOperandInstruction<
+  'xchgRegisterWithAccumulator',
+  WordRegister
+>;
 
-export interface DivDivideUnsignedInstruction {
-  readonly kind: 'divDivideUnsigned';
-  readonly dest: RegisterOrEac;
-}
+export type CbwConvertByteToWordInstruction = _NoOperandInstruction<'cbwConvertByteToWord'>;
 
-export interface IDivIntegerDivideSignedInstruction {
-  readonly kind: 'iDivIntegerDivideSigned';
-  readonly dest: RegisterOrEac;
-}
+export type CwdConvertWordToDoubleWordInstruction =
+  _NoOperandInstruction<'cwdConvertWordToDoubleWord'>;
 
-export interface ClcClearCarryInstruction {
-  readonly kind: 'clcClearCarry';
-}
+export type CallDirectIntersegmentInstruction = _TwoOperandInstruction<
+  'callDirectIntersegment',
+  number,
+  number
+>;
 
-export interface StcSetCarryInstruction {
-  readonly kind: 'stcSetCarry';
-}
+export type WaitInstruction = _NoOperandInstruction<'wait'>;
 
-export interface CliClearInterruptInstruction {
-  readonly kind: 'cliClearInterrupt';
-}
+export type PushfPushFlagsInstruction = _NoOperandInstruction<'pushfPushFlags'>;
 
-export interface StiSetInterruptInstruction {
-  readonly kind: 'stiSetInterrupt';
-}
+export type PopfPopFlagsInstruction = _NoOperandInstruction<'popfPopFlags'>;
 
-export interface CldClearDirectionInstruction {
-  readonly kind: 'cldClearDirection';
-}
+export type SahfStoreAhIntoFlagsInstruction = _NoOperandInstruction<'sahfStoreAhIntoFlags'>;
 
-export interface StdSetDirectionInstruction {
-  readonly kind: 'stdSetDirection';
-}
+export type LahfLoadAhWithFlagsInstruction = _NoOperandInstruction<'lahfLoadAhWithFlags'>;
+
+export type MovMemoryToFromAccumulatorInstruction = _TwoOperandInstruction<
+  'movMemoryToFromAccumulator',
+  AccumulatorRegister | { kind: 'mem'; text: 'DIRECT ADDRESS'; displacement: number },
+  AccumulatorRegister | { kind: 'mem'; text: 'DIRECT ADDRESS'; displacement: number }
+>;
+
+export type MovsMoveByteWordInstruction = _NoOperandInstruction<'movsMoveByteWord'> &
+  _Repable &
+  _TracksWord;
+
+export type CmpsCompareByteWordInstruction = _NoOperandInstruction<'cmpsCompareByteWord'> &
+  _Repable &
+  _TracksWord;
+
+export type TestImmediateWithAccumulatorInstruction = _TwoOperandInstruction<
+  'testImmediateWithAccumulator',
+  AccumulatorRegister,
+  number
+>;
+
+export type StosStoreByteWordFromAlAxInstruction =
+  _NoOperandInstruction<'stosStoreByteWordFromAlAx'> & _Repable & _TracksWord;
+
+export type LodsLoadByteWordFromAlAxInstruction =
+  _NoOperandInstruction<'lodsLoadByteWordFromAlAx'> & _Repable & _TracksWord;
 
-export interface IncRegisterMemoryInstruction {
-  readonly kind: 'incRegisterMemory';
-  readonly dest: RegisterOrEac;
-}
+export type ScasScanByteWordInstruction = _NoOperandInstruction<'scasScanByteWord'> &
+  _Repable &
+  _TracksWord;
+
+export type MovImmediateToRegisterInstruction = _TwoOperandInstruction<
+  'movImmediateToRegister',
+  Register,
+  number
+>;
+
+export type RetWithinSegAddingImmedToSpInstruction = _OneOperandInstruction<
+  'retWithinSegAddingImmedToSp',
+  number
+>;
 
-export interface DecRegisterMemoryInstruction {
-  readonly kind: 'decRegisterMemory';
-  readonly dest: RegisterOrEac;
-}
+export type RetWithinSegmentInstruction = _NoOperandInstruction<'retWithinSegment'>;
 
-export interface CallIndirectWithinSegmentInstruction {
-  readonly kind: 'callIndirectWithinSegment';
-  readonly dest: RegisterOrEac;
-}
+export type LesLoadPointerToEsInstruction = _TwoOperandInstruction<
+  'lesLoadPointerToEs',
+  WordRegister,
+  EffectiveAddressCalculation
+>;
 
-export interface CallIndirectIntersegmentInstruction {
-  readonly kind: 'callIndirectIntersegment';
-  readonly dest: EffectiveAddressCalculation;
-}
+export type LdsLoadPointerToDsInstruction = _TwoOperandInstruction<
+  'ldsLoadPointerToDs',
+  WordRegister,
+  EffectiveAddressCalculation
+>;
+
+export type MovImmediateToRegisterMemoryInstruction = _TwoOperandInstruction<
+  'movImmediateToRegisterMemory',
+  RegisterOrEac,
+  number
+>;
+
+export type RetIntersegmentAddingImmediateToSpInstruction = _OneOperandInstruction<
+  'retIntersegmentAddingImmediateToSp',
+  number
+>;
+
+export type RetIntersegmentInstruction = _NoOperandInstruction<'retIntersegment'>;
+
+export type IntType3Instruction = _NoOperandInstruction<'intType3'>;
+
+export type IntTypeSpecifiedInstruction = _OneOperandInstruction<'intTypeSpecified', number>;
+
+export type IntoInterruptOnOverflowInstruction = _NoOperandInstruction<'intoInterruptOnOverflow'>;
+
+export type IretInterruptReturnInstruction = _NoOperandInstruction<'iretInterruptReturn'>;
+
+export type RolRotateLeftInstruction = _TwoOperandInstruction<
+  'rolRotateLeft',
+  RegisterOrEac,
+  1 | typeof clReg
+>;
+
+export type RorRotateRightInstruction = _TwoOperandInstruction<
+  'rorRotateRight',
+  RegisterOrEac,
+  1 | typeof clReg
+>;
+
+export type RclRotateThroughCarryFlagLeftInstruction = _TwoOperandInstruction<
+  'rclRotateThroughCarryFlagLeft',
+  RegisterOrEac,
+  1 | typeof clReg
+>;
+
+export type RcrRotateThroughCarryRightInstruction = _TwoOperandInstruction<
+  'rcrRotateThroughCarryRight',
+  RegisterOrEac,
+  1 | typeof clReg
+>;
+
+export type SalShiftLogicalArithmeticLeftInstruction = _TwoOperandInstruction<
+  'salShiftLogicalArithmeticLeft',
+  RegisterOrEac,
+  1 | typeof clReg
+>;
+
+export type ShrShiftLogicalRightInstruction = _TwoOperandInstruction<
+  'shrShiftLogicalRight',
+  RegisterOrEac,
+  1 | typeof clReg
+>;
+
+export type SarShiftArithmeticRightInstruction = _TwoOperandInstruction<
+  'sarShiftArithmeticRight',
+  RegisterOrEac,
+  1 | typeof clReg
+>;
+
+export type AamAsciiAdjustForMultipleInstruction =
+  _NoOperandInstruction<'aamAsciiAdjustForMultiply'>;
+
+export type AadAsciiAdjustForDivideInstruction = _NoOperandInstruction<'aadAsciiAdjustForDivide'>;
+
+export type XlatTranslateByteToAlInstruction = _NoOperandInstruction<'xlatTranslateByteToAl'>;
+
+export type EscEscapeToExternalDeviceInstruction = _TwoOperandInstruction<
+  'escEscapeToExternalDevice',
+  RegisterOrEac,
+  number
+>;
 
-export interface JmpIndirectWithinSegmentInstruction {
-  readonly kind: 'jmpIndirectWithinSegment';
-  readonly dest: RegisterOrEac;
-}
+export type LoopneLoopWhileNotEqualInstruction = _OneOperandInstruction<
+  'loopneLoopWhileNotEqual',
+  number
+>;
 
-export interface JmpIndirectIntersegmentInstruction {
-  readonly kind: 'jmpIndirectIntersegment';
-  readonly dest: EffectiveAddressCalculation;
-}
+export type LoopeLoopWhileEqualInstruction = _OneOperandInstruction<'loopeLoopWhileEqual', number>;
 
-export interface PushRegisterMemoryInstruction {
-  readonly kind: 'pushRegisterMemory';
-  // Table 4-35 says MEM16 only, but 4-12 calls it Push register/memory,
-  // and the equivalent pop instruction is register/memory, so...
-  readonly dest: RegisterOrEac;
-}
+export type LoopLoopCxTimesInstruction = _OneOperandInstruction<'loopLoopCxTimes', number>;
 
-export interface UnknownInstruction {
-  readonly kind: 'UNKNOWN';
-}
+export type JcxzJumpOnCxZeroInstruction = _OneOperandInstruction<'jcxzJumpOnCxZero', number>;
 
-export interface NotUsedInstruction {
-  readonly kind: 'NOT USED';
-  readonly byte: number;
-}
+export type InFixedPortInstruction = _TwoOperandInstruction<
+  'inFixedPort',
+  AccumulatorRegister,
+  number
+>;
+
+export type OutFixedPortInstruction = _TwoOperandInstruction<
+  'outFixedPort',
+  AccumulatorRegister,
+  number
+>;
+
+export type CallDirectWithinSegmentInstruction = _OneOperandInstruction<
+  'callDirectWithinSegment',
+  number
+>;
+
+export type JmpDirectWithinSegmentInstruction = _OneOperandInstruction<
+  'jmpDirectWithinSegment',
+  number
+>;
+
+export type JmpDirectIntersegmentInstruction = _TwoOperandInstruction<
+  'jmpDirectIntersegment',
+  number,
+  number
+>;
+
+export type JmpDirectWithinSegmentShortInstruction = _OneOperandInstruction<
+  'jmpDirectWithinSegmentShort',
+  number
+>;
+
+export type InVariablePortInstruction = _OneOperandInstruction<
+  'inVariablePort',
+  AccumulatorRegister
+>;
+
+export type OutVariablePortInstruction = _OneOperandInstruction<
+  'outVariablePortInstruction',
+  AccumulatorRegister
+>;
+
+export type HltHaltInstruction = _NoOperandInstruction<'hltHalt'>;
+
+export type CmcComplementCarryInstruction = _NoOperandInstruction<'cmcComplementCarry'>;
+
+export type TestImmediateDataAndRegisterMemoryInstruction = _TwoOperandInstruction<
+  'testImmediateDataAndRegisterMemory',
+  RegisterOrEac,
+  number
+>;
+
+export type NotInvertInstruction = _OneOperandInstruction<'notInvert', RegisterOrEac> & _Lockable;
+
+export type NegChangeSignInstruction = _OneOperandInstruction<'negChangeSign', RegisterOrEac> &
+  _Lockable;
+
+export type MulMultipleUnsignedInstruction = _OneOperandInstruction<
+  'mulMultipleUnsigned',
+  RegisterOrEac
+>;
+
+export type ImulIntegerMultiplySignedInstruction = _OneOperandInstruction<
+  'imulIntegerMultiplySigned',
+  RegisterOrEac
+>;
+
+export type DivDivideUnsignedInstruction = _OneOperandInstruction<
+  'divDivideUnsigned',
+  RegisterOrEac
+>;
+
+export type IdivIntegerDivideSignedInstruction = _OneOperandInstruction<
+  'idivIntegerDivideSigned',
+  RegisterOrEac
+>;
+
+export type ClcClearCarryInstruction = _NoOperandInstruction<'clcClearCarry'>;
+
+export type StcSetCarryInstruction = _NoOperandInstruction<'stcSetCarry'>;
+
+export type CliClearInterruptInstruction = _NoOperandInstruction<'cliClearInterrupt'>;
+
+export type StiSetInterruptInstruction = _NoOperandInstruction<'stiSetInterrupt'>;
+
+export type CldClearDirectionInstruction = _NoOperandInstruction<'cldClearDirection'>;
+
+export type StdSetDirectionInstruction = _NoOperandInstruction<'stdSetDirection'>;
+
+export type IncRegisterMemoryInstruction = _OneOperandInstruction<
+  'incRegisterMemory',
+  RegisterOrEac
+> &
+  _Lockable;
+
+export type DecRegisterMemoryInstruction = _OneOperandInstruction<
+  'decRegisterMemory',
+  RegisterOrEac
+> &
+  _Lockable;
+
+export type CallIndirectWithinSegmentInstruction = _OneOperandInstruction<
+  'callIndirectWithinSegment',
+  RegisterOrEac
+>;
+
+export type CallIndirectIntersegmentInstruction = _OneOperandInstruction<
+  'callIndirectIntersegment',
+  EffectiveAddressCalculation
+>;
+
+export type JmpIndirectWithinSegmentInstruction = _OneOperandInstruction<
+  'jmpIndirectWithinSegment',
+  RegisterOrEac
+>;
+
+export type JmpIndirectIntersegmentInstruction = _OneOperandInstruction<
+  'jmpIndirectIntersegment',
+  EffectiveAddressCalculation
+>;
+
+// Table 4-35 says MEM16 only, but 4-12 calls it Push register/memory,
+// and the equivalent pop instruction is register/memory, so...
+export type PushRegisterMemoryInstruction = _OneOperandInstruction<
+  'pushRegisterMemory',
+  RegisterOrEac
+>;
+
+export type UnknownInstruction = _NoOperandInstruction<'UNKNOWN'>;
+
+export type NotUsedInstruction = _OneOperandInstruction<'NOT USED', number>;
 
 type ShortLabelJumpInstruction =
-  | JumpOnOverflowInstruction
-  | JumpOnNotOverflowInstruction
-  | JumpOnBelowInstruction
-  | JumpOnNotBelowInstruction
-  | JumpOnEqualInstruction
-  | JumpOnNotEqualInstruction
-  | JumpOnNotAboveInstruction
-  | JumpOnAboveInstruction
-  | JumpOnSignInstruction
-  | JumpOnNotSignInstruction
-  | JumpOnParityInstruction
-  | JumpOnNotParityInstruction
-  | JumpOnLessInstruction
-  | JumpOnNotLessInstruction
-  | JumpOnNotGreaterInstruction
-  | JumpOnGreaterInstruction;
+  | JoJumpOnOverflowInstruction
+  | JnoJumpOnNotOverflowInstruction
+  | JbJumpOnBelowInstruction
+  | JnbJumpOnNotBelowInstruction
+  | JeJumpOnEqualInstruction
+  | JneJumpOnNotEqualInstruction
+  | JnaJumpOnNotAboveInstruction
+  | JaJumpOnAboveInstruction
+  | JsJumpOnSignInstruction
+  | JnsJumpOnNotSignInstruction
+  | JpJumpOnParityInstruction
+  | JnpJumpOnNotParityInstruction
+  | JlJumpOnLessInstruction
+  | JnlJumpOnNotLessInstruction
+  | JngJumpOnNotGreaterInstruction
+  | JgJumpOnGreaterInstruction;
 
 type ArithmeticLogicImmediateToRegisterMemoryInstruction =
   | AddImmediateToRegisterMemoryInstruction
@@ -767,9 +657,9 @@ type SingleOperandMathInstruction =
   | NotInvertInstruction
   | NegChangeSignInstruction
   | MulMultipleUnsignedInstruction
-  | IMulIntegerMultiplySignedInstruction
+  | ImulIntegerMultiplySignedInstruction
   | DivDivideUnsignedInstruction
-  | IDivIntegerDivideSignedInstruction;
+  | IdivIntegerDivideSignedInstruction;
 
 type MiscFfByteInstruction =
   | IncRegisterMemoryInstruction
@@ -793,16 +683,16 @@ export type DecodedInstruction =
   | SbbImmediateFromAccumulatorInstruction
   | AndRegisterMemoryWithRegisterToEitherInstruction
   | AndImmediateToAccumulatorInstruction
-  | DecimalAdjustForAddInstruction
+  | DaaDecimalAdjustForAddInstruction
   | SubRegisterMemoryAndRegisterToEitherInstruction
   | SubImmediateFromAccumulatorInstruction
-  | DecimalAdjustForSubtractInstruction
+  | DasDecimalAdjustForSubtractInstruction
   | XorRegisterMemoryAndRegisterToEitherInstruction
   | XorImmediateToAccumulatorInstruction
-  | AsciiAdjustForAddInstruction
+  | AaaAsciiAdjustForAddInstruction
   | CmpRegisterMemoryAndRegisterInstruction
   | CmpImmediateWithAccumulatorInstruction
-  | AsciiAdjustForSubtractInstruction
+  | AasAsciiAdjustForSubtractInstruction
   | IncRegisterInstruction
   | DecRegisterInstruction
   | PushRegisterInstruction
@@ -826,12 +716,12 @@ export type DecodedInstruction =
   | SahfStoreAhIntoFlagsInstruction
   | LahfLoadAhWithFlagsInstruction
   | MovMemoryToFromAccumulatorInstruction
-  | MovsInstruction
-  | CmpsInstruction
+  | MovsMoveByteWordInstruction
+  | CmpsCompareByteWordInstruction
   | TestImmediateWithAccumulatorInstruction
-  | StosInstruction
-  | LodsInstruction
-  | ScasInstruction
+  | StosStoreByteWordFromAlAxInstruction
+  | LodsLoadByteWordFromAlAxInstruction
+  | ScasScanByteWordInstruction
   | MovImmediateToRegisterInstruction
   | RetWithinSegAddingImmedToSpInstruction
   | RetWithinSegmentInstruction
@@ -1060,37 +950,37 @@ const effectiveAddressTable: Readonly<Record<number, EffectiveAddressCalculation
 // 70 - 7f in table 4-13
 const shortLabelJumpInstructionTable: ReadonlyArray<ShortLabelJumpInstruction['kind']> = [
   // 0000
-  'jumpOnOverflow',
+  'joJumpOnOverflow',
   // 0001
-  'jumpOnNotOverflow',
+  'jnoJumpOnNotOverflow',
   // 0010
-  'jumpOnBelow',
+  'jbJumpOnBelow',
   // 0011
-  'jumpOnNotBelow',
+  'jnbJumpOnNotBelow',
   // 0100
-  'jumpOnEqual',
+  'jeJumpOnEqual',
   // 0101
-  'jumpOnNotEqual',
+  'jneJumpOnNotEqual',
   // 0110
-  'jumpOnNotAbove',
+  'jnaJumpOnNotAbove',
   // 0111
-  'jumpOnAbove',
+  'jaJumpOnAbove',
   // 1000
-  'jumpOnSign',
+  'jsJumpOnSign',
   // 1001
-  'jumpOnNotSign',
+  'jnsJumpOnNotSign',
   // 1010
-  'jumpOnParity',
+  'jpJumpOnParity',
   // 1011
-  'jumpOnNotParity',
+  'jnpJumpOnNotParity',
   // 1100
-  'jumpOnLess',
+  'jlJumpOnLess',
   // 1101
-  'jumpOnNotLess',
+  'jnlJumpOnNotLess',
   // 1110
-  'jumpOnNotGreater',
+  'jngJumpOnNotGreater',
   // 1111
-  'jumpOnGreater',
+  'jgJumpOnGreater',
 ];
 
 const standardArithmeticLogicImmediateToRegisterMemoryInstructionTable: ReadonlyArray<
@@ -1171,11 +1061,11 @@ const singleOperandMathInstructionTable: ReadonlyArray<
   // 100
   'mulMultipleUnsigned',
   // 101
-  'iMulIntegerMultiplySigned',
+  'imulIntegerMultiplySigned',
   // 110
   'divDivideUnsigned',
   // 111
-  'iDivIntegerDivideSigned',
+  'idivIntegerDivideSigned',
 ];
 
 const miscFfByteInstructionTable: ReadonlyArray<
@@ -1199,7 +1089,7 @@ const miscFfByteInstructionTable: ReadonlyArray<
   'NOT USED',
 ];
 
-type RepPrefix = 'rep' | 'repne';
+type RepPrefix = 'rep ' | 'repne ';
 
 class DecodingContext {
   index = 0;
@@ -1299,8 +1189,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'addRegisterMemoryWithRegisterToEither',
-        dest,
-        source,
+        op1: dest,
+        op2: source,
         lock: consumeLockPrefix(context, dest),
       };
 
@@ -1316,8 +1206,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'addImmediateToAccumulator',
-        dest,
-        data,
+        op1: dest,
+        op2: data,
       };
 
       break;
@@ -1328,7 +1218,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     case 0b0000_0110: {
       instruction = {
         kind: 'pushSegmentRegister',
-        register: 'es',
+        op1: 'es',
       };
 
       break;
@@ -1339,7 +1229,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     case 0b0000_0111: {
       instruction = {
         kind: 'popSegmentRegister',
-        register: 'es',
+        op1: 'es',
       };
 
       break;
@@ -1356,8 +1246,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'orRegisterMemoryAndRegisterToEither',
-        dest,
-        source,
+        op1: dest,
+        op2: source,
         lock: consumeLockPrefix(context, dest),
       };
 
@@ -1373,8 +1263,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'orImmediateToAccumulator',
-        dest,
-        data,
+        op1: dest,
+        op2: data,
       };
 
       break;
@@ -1385,7 +1275,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     case 0b0000_1110: {
       instruction = {
         kind: 'pushSegmentRegister',
-        register: 'cs',
+        op1: 'cs',
       };
 
       break;
@@ -1396,7 +1286,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     case 0b0000_1111: {
       instruction = {
         kind: 'NOT USED',
-        byte: firstByte,
+        op1: firstByte,
       };
 
       break;
@@ -1413,8 +1303,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'adcRegisterMemoryWithRegisterToEither',
-        dest,
-        source,
+        op1: dest,
+        op2: source,
         lock: consumeLockPrefix(context, dest),
       };
 
@@ -1430,8 +1320,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'adcImmediateToAccumulator',
-        dest,
-        data,
+        op1: dest,
+        op2: data,
       };
 
       break;
@@ -1442,7 +1332,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     case 0b0001_0110: {
       instruction = {
         kind: 'pushSegmentRegister',
-        register: 'ss',
+        op1: 'ss',
       };
 
       break;
@@ -1453,7 +1343,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     case 0b0001_0111: {
       instruction = {
         kind: 'popSegmentRegister',
-        register: 'ss',
+        op1: 'ss',
       };
 
       break;
@@ -1470,8 +1360,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'sbbRegisterMemoryAndRegisterToEither',
-        dest,
-        source,
+        op1: dest,
+        op2: source,
         lock: consumeLockPrefix(context, dest),
       };
 
@@ -1487,8 +1377,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'sbbImmediateFromAccumulator',
-        dest,
-        data,
+        op1: dest,
+        op2: data,
       };
 
       break;
@@ -1499,7 +1389,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     case 0b0001_1110: {
       instruction = {
         kind: 'pushSegmentRegister',
-        register: 'ds',
+        op1: 'ds',
       };
 
       break;
@@ -1510,7 +1400,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     case 0b0001_1111: {
       instruction = {
         kind: 'popSegmentRegister',
-        register: 'ds',
+        op1: 'ds',
       };
 
       break;
@@ -1527,8 +1417,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'andRegisterMemoryWithRegisterToEither',
-        dest,
-        source,
+        op1: dest,
+        op2: source,
         lock: consumeLockPrefix(context, dest),
       };
 
@@ -1544,8 +1434,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'andImmediateToAccumulator',
-        dest,
-        data,
+        op1: dest,
+        op2: data,
       };
 
       break;
@@ -1566,7 +1456,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     // daa Decimal adjust for add
     case 0b0010_0111: {
       instruction = {
-        kind: 'decimalAdjustForAdd',
+        kind: 'daaDecimalAdjustForAdd',
       };
 
       break;
@@ -1583,8 +1473,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'subRegisterMemoryAndRegisterToEither',
-        dest,
-        source,
+        op1: dest,
+        op2: source,
         lock: consumeLockPrefix(context, dest),
       };
 
@@ -1600,8 +1490,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'subImmediateFromAccumulator',
-        dest,
-        data,
+        op1: dest,
+        op2: data,
       };
 
       break;
@@ -1622,7 +1512,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     // das Decimal adjust for subtract
     case 0b0010_1111: {
       instruction = {
-        kind: 'decimalAdjustForSubtract',
+        kind: 'dasDecimalAdjustForSubtract',
       };
 
       break;
@@ -1639,8 +1529,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'xorRegisterMemoryAndRegisterToEither',
-        dest,
-        source,
+        op1: dest,
+        op2: source,
         lock: consumeLockPrefix(context, dest),
       };
 
@@ -1656,8 +1546,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'xorImmediateToAccumulator',
-        dest,
-        data,
+        op1: dest,
+        op2: data,
       };
 
       break;
@@ -1678,7 +1568,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     // aaa ASCII adjust for add
     case 0b0011_0111: {
       instruction = {
-        kind: 'asciiAdjustForAdd',
+        kind: 'aaaAsciiAdjustForAdd',
       };
 
       break;
@@ -1695,8 +1585,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'cmpRegisterMemoryAndRegister',
-        dest,
-        source,
+        op1: dest,
+        op2: source,
       };
 
       break;
@@ -1711,8 +1601,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'cmpImmediateWithAccumulator',
-        dest,
-        data,
+        op1: dest,
+        op2: data,
       };
 
       break;
@@ -1733,7 +1623,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     // aas ASCII adjust for subtract
     case 0b0011_1111: {
       instruction = {
-        kind: 'asciiAdjustForSubtract',
+        kind: 'aasAsciiAdjustForSubtract',
       };
 
       break;
@@ -1754,7 +1644,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'incRegister',
-        register,
+        op1: register,
       };
 
       break;
@@ -1775,7 +1665,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'decRegister',
-        register,
+        op1: register,
       };
 
       break;
@@ -1796,7 +1686,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'pushRegister',
-        register,
+        op1: register,
       };
 
       break;
@@ -1817,7 +1707,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'popRegister',
-        register,
+        op1: register,
       };
 
       break;
@@ -1841,7 +1731,10 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     case 0b0110_1101:
     case 0b0110_1110:
     case 0b0110_1111: {
-      instruction = { kind: 'NOT USED', byte: firstByte };
+      instruction = {
+        kind: 'NOT USED',
+        op1: firstByte,
+      };
 
       break;
     }
@@ -1870,7 +1763,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: shortLabelJumpInstructionTable[firstByte & 0b0000_1111],
-        signedIncrement: getAsTwosComplement(context.instructionBytes[context.index], 128),
+        op1: getAsTwosComplement(context.instructionBytes[context.index], 128),
       };
 
       break;
@@ -1914,8 +1807,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: instructionKind,
-        dest,
-        data,
+        op1: dest,
+        op2: data,
         lock: consumeLockPrefix(context, dest),
       };
 
@@ -1931,8 +1824,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'testRegisterMemoryAndRegister',
-        dest,
-        source,
+        op1: dest,
+        op2: source,
       };
 
       break;
@@ -1952,8 +1845,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'xchgRegisterMemoryWithRegister',
-        dest,
-        source,
+        op1: dest,
+        op2: source,
         lock,
       };
 
@@ -1971,8 +1864,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'movRegisterMemoryToFromRegister',
-        dest,
-        source,
+        op1: dest,
+        op2: source,
       };
 
       break;
@@ -1995,8 +1888,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'movSegmentRegisterToRegisterMemory',
-        dest,
-        source,
+        op1: dest,
+        op2: source,
       };
 
       break;
@@ -2017,8 +1910,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'leaLoadEaToRegister',
-        dest,
-        source,
+        op1: dest,
+        op2: source,
       };
 
       break;
@@ -2041,8 +1934,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'movRegisterMemoryToSegmentRegister',
-        dest,
-        source,
+        op1: dest,
+        op2: source,
       };
 
       break;
@@ -2063,27 +1956,18 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'popRegisterMemory',
-        dest,
+        op1: dest,
       };
 
       break;
     }
 
     // 90
-    // nop (exchange AX, AX)
-    // Casey's listing doesn't have this so I guess it's effectively no used, but TODO try getting nasm to assemble it
-    case 0b1001_0000: {
-      instruction = {
-        kind: 'NOT USED',
-        byte: firstByte,
-      };
-
-      break;
-    }
-
+    // xchg ax, ax (nop in the manual, but nasm compiles xchg ax, ax to these bytes)
     // 91 - 97
     // xchg Register with accumulator
     // Layout 1001 0rrr    (r = word register)
+    case 0b1001_0000:
     case 0b1001_0001:
     case 0b1001_0010:
     case 0b1001_0011:
@@ -2095,7 +1979,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'xchgRegisterWithAccumulator',
-        source,
+        op1: source,
       };
 
       break;
@@ -2129,8 +2013,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'callDirectIntersegment',
-        ip,
-        cs,
+        op1: ip,
+        op2: cs,
       };
 
       break;
@@ -2208,8 +2092,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'movMemoryToFromAccumulator',
-        dest: isAccToMem ? memoryAddressCalculation : reg,
-        source: isAccToMem ? reg : memoryAddressCalculation,
+        op1: isAccToMem ? memoryAddressCalculation : reg,
+        op2: isAccToMem ? reg : memoryAddressCalculation,
       };
 
       break;
@@ -2220,7 +2104,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     case 0b1010_0100:
     case 0b1010_0101: {
       instruction = {
-        kind: 'movs',
+        kind: 'movsMoveByteWord',
         word: !!(firstByte & 0b0000_0001),
         rep: consumeRepPrefix(context),
       };
@@ -2233,7 +2117,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     case 0b1010_0110:
     case 0b1010_0111: {
       instruction = {
-        kind: 'cmps',
+        kind: 'cmpsCompareByteWord',
         word: !!(firstByte & 0b0000_0001),
         rep: consumeRepPrefix(context),
       };
@@ -2254,9 +2138,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'testImmediateWithAccumulator',
-
-        dest,
-        data,
+        op1: dest,
+        op2: data,
       };
 
       break;
@@ -2267,7 +2150,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     case 0b1010_1010:
     case 0b1010_1011: {
       instruction = {
-        kind: 'stos',
+        kind: 'stosStoreByteWordFromAlAx',
         word: !!(firstByte & 0b0000_0001),
         rep: consumeRepPrefix(context),
       };
@@ -2280,7 +2163,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     case 0b1010_1100:
     case 0b1010_1101: {
       instruction = {
-        kind: 'lods',
+        kind: 'lodsLoadByteWordFromAlAx',
         word: !!(firstByte & 0b0000_0001),
         rep: consumeRepPrefix(context),
       };
@@ -2293,7 +2176,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     case 0b1010_1110:
     case 0b1010_1111: {
       instruction = {
-        kind: 'scas',
+        kind: 'scasScanByteWord',
         word: !!(firstByte & 0b0000_0001),
         rep: consumeRepPrefix(context),
       };
@@ -2327,8 +2210,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'movImmediateToRegister',
-        dest,
-        data,
+        op1: dest,
+        op2: data,
       };
 
       break;
@@ -2340,7 +2223,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     case 0b1100_0001: {
       instruction = {
         kind: 'NOT USED',
-        byte: firstByte,
+        op1: firstByte,
       };
 
       break;
@@ -2353,7 +2236,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'retWithinSegAddingImmedToSp',
-        data,
+        op1: data,
       };
 
       break;
@@ -2386,8 +2269,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 0b0000_0001 & firstByte ? 'ldsLoadPointerToDs' : 'lesLoadPointerToEs',
-        dest,
-        source,
+        op1: dest,
+        op2: source,
       };
 
       break;
@@ -2412,7 +2295,11 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       const data = decodeIntLiteralData(context, wBit);
 
-      instruction = { kind: 'movImmediateToRegisterMemory', dest, data };
+      instruction = {
+        kind: 'movImmediateToRegisterMemory',
+        op1: dest,
+        op2: data,
+      };
 
       break;
     }
@@ -2423,7 +2310,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     case 0b1100_1001: {
       instruction = {
         kind: 'NOT USED',
-        byte: firstByte,
+        op1: firstByte,
       };
 
       break;
@@ -2436,7 +2323,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'retIntersegmentAddingImmediateToSp',
-        data,
+        op1: data,
       };
 
       break;
@@ -2469,7 +2356,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'intTypeSpecified',
-        data,
+        op1: data,
       };
 
       break;
@@ -2517,12 +2404,12 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       const dest = decodeRegisterOrEffectiveAddressCalculation(context, destRm);
 
-      const source: LogicWithOneOrClInstruction['source'] = vBit ? clReg : 1;
+      const source: LogicWithOneOrClInstruction['op2'] = vBit ? clReg : 1;
 
       const _instruction: LogicWithOneOrClInstruction = {
         kind: instructionKind,
-        dest,
-        source,
+        op1: dest,
+        op2: source,
       };
 
       instruction = _instruction;
@@ -2561,7 +2448,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     case 0b1101_0110: {
       instruction = {
         kind: 'NOT USED',
-        byte: firstByte,
+        op1: firstByte,
       };
 
       break;
@@ -2601,8 +2488,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'escEscapeToExternalDevice',
-        source,
-        data: fullOpCode,
+        op1: source,
+        op2: fullOpCode,
       };
 
       break;
@@ -2618,7 +2505,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: loopOrJumpCxInstructionTable[firstByte & 0b0000_0011],
-        signedIncrement: getAsTwosComplement(context.instructionBytes[context.index], 128),
+        op1: getAsTwosComplement(context.instructionBytes[context.index], 128),
       };
 
       break;
@@ -2642,8 +2529,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: instructionKind,
-        dest,
-        data,
+        op1: dest,
+        op2: data,
       };
 
       break;
@@ -2656,7 +2543,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'callDirectWithinSegment',
-        ip,
+        op1: ip,
       };
 
       break;
@@ -2669,7 +2556,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'jmpDirectWithinSegment',
-        ip,
+        op1: ip,
       };
 
       break;
@@ -2683,8 +2570,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'jmpDirectIntersegment',
-        ip,
-        cs,
+        op1: ip,
+        op2: cs,
       };
 
       break;
@@ -2697,7 +2584,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'jmpDirectWithinSegmentShort',
-        ip,
+        op1: ip,
       };
 
       break;
@@ -2722,7 +2609,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: instructionKind,
-        dest,
+        op1: dest,
       };
 
       break;
@@ -2744,7 +2631,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     case 0b1111_0001: {
       instruction = {
         kind: 'NOT USED',
-        byte: firstByte,
+        op1: firstByte,
       };
 
       break;
@@ -2754,7 +2641,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     // repne prefix
     // recurse (only 1 depth) and attach to the next instruction
     case 0b1111_0010: {
-      context.rep = 'repne';
+      context.rep = 'repne ';
 
       context.index++;
 
@@ -2765,7 +2652,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     // rep prefix
     // recurse (only 1 depth) and attach to the next instruction
     case 0b1111_0011: {
-      context.rep = 'rep';
+      context.rep = 'rep ';
 
       context.index++;
 
@@ -2809,8 +2696,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
         instruction = {
           kind: 'testImmediateDataAndRegisterMemory',
-          dest,
-          data,
+          op1: dest,
+          op2: data,
         };
 
         break;
@@ -2823,9 +2710,15 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
           );
         }
 
+        const lock = consumeLockPrefix(context, dest);
+        if (lock && instructionKind !== 'negChangeSign' && instructionKind !== 'notInvert') {
+          throw Error('This instruction is not lockable');
+        }
+
         instruction = {
           kind: instructionKind,
-          dest,
+          op1: dest,
+          lock,
         };
 
         break;
@@ -2921,12 +2814,22 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
         instruction = {
           kind: instructionKind,
-          dest,
+          op1: dest,
         };
       } else {
+        const lock = consumeLockPrefix(context, dest);
+        if (
+          lock &&
+          instructionKind !== 'decRegisterMemory' &&
+          instructionKind !== 'incRegisterMemory'
+        ) {
+          throw Error('This instruction is not lockable');
+        }
+
         instruction = {
           kind: instructionKind,
-          dest,
+          op1: dest,
+          lock,
         };
       }
 
@@ -3126,8 +3029,8 @@ function consumeLockPrefix(context: DecodingContext, dest: RegisterOrEac): boole
   return value;
 }
 
-function consumeRepPrefix(context: DecodingContext): RepPrefix | undefined {
-  const value = context.rep;
+function consumeRepPrefix(context: DecodingContext): RepPrefix | null {
+  const value = context.rep ?? null;
 
   context.rep = undefined;
 

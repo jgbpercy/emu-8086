@@ -1,4 +1,4 @@
-import { DecodedInstruction, DecodedInstructionWithByteIndex, RegisterOrEac } from './decoder';
+import { DecodedInstruction, DecodedInstructionWithByteIndex, Operand } from './decoder';
 
 const bitsDirective = 'bits 16';
 
@@ -60,383 +60,182 @@ export function printDecodedInstructionsWithBytes(
   return strings.join('\n');
 }
 
+// Order is first appearance in decoder switch (i.e. earliest byte that encodes the instruction)
+const mnemonicsTable = {
+  addRegisterMemoryWithRegisterToEither: 'add',
+  addImmediateToAccumulator: 'add',
+  pushSegmentRegister: 'push',
+  popSegmentRegister: 'pop',
+  orRegisterMemoryAndRegisterToEither: 'or',
+  orImmediateToAccumulator: 'or',
+  adcRegisterMemoryWithRegisterToEither: 'adc',
+  adcImmediateToAccumulator: 'adc',
+  sbbRegisterMemoryAndRegisterToEither: 'sbb',
+  sbbImmediateFromAccumulator: 'sbb',
+  andRegisterMemoryWithRegisterToEither: 'and',
+  andImmediateToAccumulator: 'and',
+  daaDecimalAdjustForAdd: 'daa',
+  subRegisterMemoryAndRegisterToEither: 'sub',
+  subImmediateFromAccumulator: 'sub',
+  dasDecimalAdjustForSubtract: 'das',
+  xorRegisterMemoryAndRegisterToEither: 'xor',
+  xorImmediateToAccumulator: 'xor',
+  aaaAsciiAdjustForAdd: 'aaa',
+  cmpRegisterMemoryAndRegister: 'cmp',
+  cmpImmediateWithAccumulator: 'cmp',
+  aasAsciiAdjustForSubtract: 'aas',
+  incRegister: 'inc',
+  decRegister: 'dec',
+  pushRegister: 'push',
+  popRegister: 'pop',
+  joJumpOnOverflow: 'jo',
+  jnoJumpOnNotOverflow: 'jno',
+  jbJumpOnBelow: 'jb',
+  jnbJumpOnNotBelow: 'jnb',
+  jeJumpOnEqual: 'je',
+  jneJumpOnNotEqual: 'jne',
+  jnaJumpOnNotAbove: 'jna',
+  jaJumpOnAbove: 'ja',
+  jsJumpOnSign: 'js',
+  jnsJumpOnNotSign: 'jns',
+  jpJumpOnParity: 'jp',
+  jnpJumpOnNotParity: 'jnp',
+  jlJumpOnLess: 'jl',
+  jnlJumpOnNotLess: 'jnl',
+  jngJumpOnNotGreater: 'jng',
+  jgJumpOnGreater: 'jg',
+  addImmediateToRegisterMemory: 'add',
+  orImmediateToRegisterMemory: 'or',
+  adcImmediateToRegisterMemory: 'adc',
+  sbbImmediateToRegisterMemory: 'sbb',
+  andImmediateToRegisterMemory: 'and',
+  subImmediateToRegisterMemory: 'sub',
+  xorImmediateToRegisterMemory: 'xor',
+  cmpImmediateToRegisterMemory: 'cmp',
+  testRegisterMemoryAndRegister: 'test',
+  xchgRegisterMemoryWithRegister: 'xchg',
+  movRegisterMemoryToFromRegister: 'mov',
+  movSegmentRegisterToRegisterMemory: 'mov',
+  leaLoadEaToRegister: 'lea',
+  movRegisterMemoryToSegmentRegister: 'mov',
+  popRegisterMemory: 'pop',
+  xchgRegisterWithAccumulator: 'xchg',
+  cbwConvertByteToWord: 'cbw',
+  cwdConvertWordToDoubleWord: 'cwd',
+  callDirectIntersegment: 'call',
+  wait: 'wait',
+  pushfPushFlags: 'pushf',
+  popfPopFlags: 'popf',
+  sahfStoreAhIntoFlags: 'sahf',
+  lahfLoadAhWithFlags: 'lahf',
+  movMemoryToFromAccumulator: 'mov',
+  movsMoveByteWord: 'movs',
+  cmpsCompareByteWord: 'cmps',
+  testImmediateWithAccumulator: 'test',
+  stosStoreByteWordFromAlAx: 'stos',
+  lodsLoadByteWordFromAlAx: 'lods',
+  scasScanByteWord: 'scas',
+  movImmediateToRegister: 'mov',
+  retWithinSegAddingImmedToSp: 'ret',
+  retWithinSegment: 'ret',
+  lesLoadPointerToEs: 'les',
+  ldsLoadPointerToDs: 'lds',
+  movImmediateToRegisterMemory: 'mov',
+  retIntersegmentAddingImmediateToSp: 'ret',
+  retIntersegment: 'ret',
+  intType3: 'int3',
+  intTypeSpecified: 'int',
+  intoInterruptOnOverflow: 'into',
+  iretInterruptReturn: 'iret',
+  rolRotateLeft: 'rol',
+  rorRotateRight: 'ror',
+  rclRotateThroughCarryFlagLeft: 'rcl',
+  rcrRotateThroughCarryRight: 'rcr',
+  salShiftLogicalArithmeticLeft: 'sal',
+  shrShiftLogicalRight: 'shr',
+  sarShiftArithmeticRight: 'sar',
+  aamAsciiAdjustForMultiply: 'aam',
+  aadAsciiAdjustForDivide: 'aad',
+  xlatTranslateByteToAl: 'xlat',
+  escEscapeToExternalDevice: 'esc',
+  loopneLoopWhileNotEqual: 'loopne',
+  loopeLoopWhileEqual: 'loope',
+  loopLoopCxTimes: 'loop',
+  jcxzJumpOnCxZero: 'jcxz',
+  inFixedPort: 'in',
+  outFixedPort: 'out',
+  callDirectWithinSegment: 'call',
+  jmpDirectWithinSegment: 'jmp',
+  jmpDirectIntersegment: 'jmp',
+  jmpDirectWithinSegmentShort: 'jmp',
+  inVariablePort: 'in',
+  outVariablePortInstruction: 'out',
+  hltHalt: 'hlt',
+  cmcComplementCarry: 'cmc',
+  testImmediateDataAndRegisterMemory: 'test',
+  notInvert: 'not',
+  negChangeSign: 'neg',
+  mulMultipleUnsigned: 'mul',
+  imulIntegerMultiplySigned: 'imul',
+  divDivideUnsigned: 'div',
+  idivIntegerDivideSigned: 'idiv',
+  clcClearCarry: 'clc',
+  stcSetCarry: 'stc',
+  cliClearInterrupt: 'cli',
+  stiSetInterrupt: 'sti',
+  cldClearDirection: 'cld',
+  stdSetDirection: 'std',
+  incRegisterMemory: 'inc',
+  decRegisterMemory: 'dec',
+  callIndirectWithinSegment: 'call',
+  callIndirectIntersegment: 'call',
+  jmpIndirectWithinSegment: 'jmp',
+  jmpIndirectIntersegment: 'jmp',
+  pushRegisterMemory: 'push',
+  'NOT USED': 'NOT USED',
+  UNKNOWN: 'UNKNOWN',
+} satisfies Readonly<Record<DecodedInstruction['kind'], string>>;
+
 function printInstruction(instruction: DecodedInstruction): string {
-  // Order is first appearance in decoder switch (i.e. earliest byte that encodes the instruction)
-  switch (instruction.kind) {
-    case 'addRegisterMemoryWithRegisterToEither': {
-      return printOpDestSourceInstruction('add', instruction);
-    }
+  const lockPrefix = 'lock' in instruction && instruction.lock ? 'lock ' : '';
 
-    case 'addImmediateToAccumulator': {
-      return `add ${instruction.dest.register}, ${instruction.data}`;
-    }
+  const repPrefix = 'rep' in instruction && instruction.rep !== null ? instruction.rep : '';
 
-    case 'pushSegmentRegister': {
-      return `push ${instruction.register}`;
-    }
+  const mnemonic = mnemonicsTable[instruction.kind];
 
-    case 'popSegmentRegister': {
-      return `pop ${instruction.register}`;
-    }
+  const wbSuffix = 'word' in instruction ? (instruction.word ? 'w' : 'b') : '';
 
-    case 'orRegisterMemoryAndRegisterToEither': {
-      return printOpDestSourceInstruction('or', instruction);
-    }
+  const op1 = 'op1' in instruction ? ` ${printOperand(instruction.op1)}` : '';
 
-    case 'orImmediateToAccumulator': {
-      return `or ${instruction.dest.register}, ${instruction.data}`;
-    }
+  const op2 = 'op2' in instruction ? `, ${printOperand(instruction.op2)}` : '';
 
-    case 'adcRegisterMemoryWithRegisterToEither': {
-      return printOpDestSourceInstruction('adc', instruction);
-    }
-
-    case 'adcImmediateToAccumulator': {
-      return `adc ${instruction.dest.register}, ${instruction.data}`;
-    }
-
-    case 'sbbRegisterMemoryAndRegisterToEither': {
-      return printOpDestSourceInstruction('sbb', instruction);
-    }
-
-    case 'sbbImmediateFromAccumulator': {
-      return `sbb ${instruction.dest.register}, ${instruction.data}`;
-    }
-
-    case 'andRegisterMemoryWithRegisterToEither': {
-      return printOpDestSourceInstruction('and', instruction);
-    }
-
-    case 'andImmediateToAccumulator': {
-      return `and ${instruction.dest.register}, ${instruction.data}`;
-    }
-
-    case 'decimalAdjustForAdd': {
-      return `daa`;
-    }
-
-    case 'subRegisterMemoryAndRegisterToEither': {
-      return printOpDestSourceInstruction('sub', instruction);
-    }
-
-    case 'subImmediateFromAccumulator': {
-      return `sub ${instruction.dest.register}, ${instruction.data}`;
-    }
-
-    case 'decimalAdjustForSubtract': {
-      return 'das';
-    }
-
-    case 'xorRegisterMemoryAndRegisterToEither': {
-      return printOpDestSourceInstruction('xor', instruction);
-    }
-
-    case 'xorImmediateToAccumulator': {
-      return `xor ${instruction.dest.register}, ${instruction.data}`;
-    }
-
-    case 'asciiAdjustForAdd': {
-      return 'aaa';
-    }
-
-    case 'cmpRegisterMemoryAndRegister': {
-      return printOpDestSourceInstruction('cmp', instruction);
-    }
-
-    case 'cmpImmediateWithAccumulator': {
-      return `cmp ${instruction.dest.register}, ${instruction.data}`;
-    }
-
-    case 'asciiAdjustForSubtract': {
-      return 'aas';
-    }
-
-    case 'incRegister': {
-      return `inc ${instruction.register.register}`;
-    }
-
-    case 'decRegister': {
-      return `dec ${instruction.register.register}`;
-    }
-
-    case 'pushRegister': {
-      return `push ${instruction.register.register}`;
-    }
-
-    case 'popRegister': {
-      return `pop ${instruction.register.register}`;
-    }
-
-    case 'jumpOnOverflow': {
-      return `jo ${instruction.signedIncrement}`;
-    }
-
-    case 'jumpOnNotOverflow': {
-      return `jno ${instruction.signedIncrement}`;
-    }
-
-    case 'jumpOnBelow': {
-      return `jb ${instruction.signedIncrement}`;
-    }
-
-    case 'jumpOnNotBelow': {
-      return `jnb ${instruction.signedIncrement}`;
-    }
-
-    case 'jumpOnEqual': {
-      return `je ${instruction.signedIncrement}`;
-    }
-
-    case 'jumpOnNotEqual': {
-      return `jne ${instruction.signedIncrement}`;
-    }
-
-    case 'jumpOnNotAbove': {
-      return `jna ${instruction.signedIncrement}`;
-    }
-
-    case 'jumpOnAbove': {
-      return `ja ${instruction.signedIncrement}`;
-    }
-
-    case 'jumpOnSign': {
-      return `js ${instruction.signedIncrement}`;
-    }
-
-    case 'jumpOnNotSign': {
-      return `jns ${instruction.signedIncrement}`;
-    }
-
-    case 'jumpOnParity': {
-      return `jp ${instruction.signedIncrement}`;
-    }
-
-    case 'jumpOnNotParity': {
-      return `jnp ${instruction.signedIncrement}`;
-    }
-
-    case 'jumpOnLess': {
-      return `jl ${instruction.signedIncrement}`;
-    }
-
-    case 'jumpOnNotLess': {
-      return `jnl ${instruction.signedIncrement}`;
-    }
-
-    case 'jumpOnNotGreater': {
-      return `jng ${instruction.signedIncrement}`;
-    }
-
-    case 'jumpOnGreater': {
-      return `jg ${instruction.signedIncrement}`;
-    }
-
-    case 'addImmediateToRegisterMemory': {
-      return printOpDestSizedDataInstruction('add', instruction);
-    }
-
-    case 'orImmediateToRegisterMemory': {
-      return printOpDestSizedDataInstruction('or', instruction);
-    }
-
-    case 'adcImmediateToRegisterMemory': {
-      return printOpDestSizedDataInstruction('adc', instruction);
-    }
-
-    case 'sbbImmediateToRegisterMemory': {
-      return printOpDestSizedDataInstruction('sbb', instruction);
-    }
-
-    case 'andImmediateToRegisterMemory': {
-      return printOpDestSizedDataInstruction('and', instruction);
-    }
-
-    case 'subImmediateToRegisterMemory': {
-      return printOpDestSizedDataInstruction('sub', instruction);
-    }
-
-    case 'xorImmediateToRegisterMemory': {
-      return printOpDestSizedDataInstruction('xor', instruction);
-    }
-
-    case 'cmpImmediateToRegisterMemory': {
-      return printOpDestSizedDataInstruction('cmp', instruction);
-    }
-
-    case 'testRegisterMemoryAndRegister': {
-      return printOpDestSourceInstruction('test', instruction);
-    }
-
-    case 'xchgRegisterMemoryWithRegister': {
-      return printOpDestSourceInstruction('xchg', instruction);
-    }
-
-    case 'movRegisterMemoryToFromRegister': {
-      return printOpDestSourceInstruction('mov', instruction);
-    }
-
-    case 'movSegmentRegisterToRegisterMemory': {
-      const destString = printRegisterOrEac(instruction.dest);
-
-      return `mov ${destString}, ${instruction.source}`;
-    }
-
-    case 'leaLoadEaToRegister': {
-      return printOpDestSourceInstruction('lea', instruction);
-    }
-
-    case 'movRegisterMemoryToSegmentRegister': {
-      const sourceString = printRegisterOrEac(instruction.source);
-
-      return `mov ${instruction.dest}, ${sourceString}`;
-    }
-
-    case 'popRegisterMemory': {
-      const destString = printRegisterOrEacWithSize(instruction.dest, true);
-
-      return `pop ${destString}`;
-    }
-
-    case 'xchgRegisterWithAccumulator': {
-      return `xchg ax, ${instruction.source.register}`;
-    }
-
-    case 'cbwConvertByteToWord': {
-      return 'cbw';
-    }
-
-    case 'cwdConvertWordToDoubleWord': {
-      return 'cwd';
-    }
-
-    case 'callDirectIntersegment': {
-      return `call ${instruction.ip}:${instruction.cs}`;
-    }
-
-    case 'wait': {
-      return 'wait';
-    }
-
-    case 'pushfPushFlags': {
-      return 'pushf';
-    }
-
-    case 'popfPopFlags': {
-      return 'popf';
-    }
-
-    case 'sahfStoreAhIntoFlags': {
-      return 'sahf';
-    }
-
-    case 'lahfLoadAhWithFlags': {
-      return 'lahf';
-    }
-
-    case 'movMemoryToFromAccumulator': {
-      return printOpDestSourceInstruction('mov', instruction);
-    }
-
-    case 'movs': {
-      return instruction.word ? 'movsw' : 'movsb';
-    }
-
-    case 'cmps': {
-      return instruction.word ? 'cmpsw' : 'cmpsb';
-    }
-
-    case 'testImmediateWithAccumulator': {
-      return ';';
-    }
-
-    case 'stos': {
-      return instruction.word ? 'stosw' : 'stosb';
-    }
-
-    case 'lods': {
-      return instruction.word ? 'lodsw' : 'lodsb';
-    }
-
-    case 'scas': {
-      return instruction.word ? 'scasw' : 'scasb';
-    }
-
-    case 'movImmediateToRegister': {
-      return `mov ${instruction.dest.register}, ${instruction.data}`;
-    }
-
-    case 'movImmediateToRegisterMemory': {
-      return printOpDestSizedDataInstruction('mov', instruction);
-    }
-
-    case 'NOT USED': {
-      return `(not used) ${toByteString(instruction.byte)}`;
-    }
-
-    case 'UNKNOWN':
-      return `UNKNOWN`;
-  }
+  return `${lockPrefix}${repPrefix}${mnemonic}${wbSuffix}${op1}${op2}`;
 }
 
-function printOpDestSourceInstruction(
-  op: string,
-  instruction: { dest: RegisterOrEac; source: RegisterOrEac },
-): string {
-  const destString = printRegisterOrEac(instruction.dest);
-  const sourceString = printRegisterOrEac(instruction.source);
-
-  return `${op} ${destString}, ${sourceString}`;
-}
-
-function printRegisterOrEacWithSize(rm: RegisterOrEac, word: boolean): string {
-  const rmString = printRegisterOrEac(rm);
-
-  let sizeString: string;
-  if (rm.kind === 'reg') {
-    sizeString = '';
+function printOperand(operand: Operand): string {
+  if (typeof operand === 'string') {
+    return operand;
+  } else if (typeof operand === 'number') {
+    return operand.toString();
+  } else if (operand.kind === 'reg') {
+    return operand.register;
   } else {
-    sizeString = word ? 'word' : 'byte';
-  }
-
-  return `${sizeString}${rmString}`;
-}
-
-function printRegisterOrEac(rm: RegisterOrEac): string {
-  if (rm.kind === 'reg') {
-    return rm.register;
-  } else {
-    const segmentOverridePrefixString = rm.segmentOverridePrefix
-      ? `${rm.segmentOverridePrefix}: `
+    const segmentOverridePrefixString = operand.segmentOverridePrefix
+      ? `${operand.segmentOverridePrefix}: `
       : '';
 
-    if (rm.displacement !== null && rm.displacement !== 0) {
-      if (rm.text === 'DIRECT ADDRESS') {
-        return `${segmentOverridePrefixString}[${rm.displacement}]`;
+    if (operand.displacement !== null && operand.displacement !== 0) {
+      if (operand.text === 'DIRECT ADDRESS') {
+        return `${segmentOverridePrefixString}[${operand.displacement}]`;
       } else {
-        const signedDisplacementString = printSignedAsOperation(rm.displacement);
+        const signedDisplacementString = printSignedAsOperation(operand.displacement);
 
-        return `${segmentOverridePrefixString}[${rm.text} ${signedDisplacementString}]`;
+        return `${segmentOverridePrefixString}[${operand.text} ${signedDisplacementString}]`;
       }
     } else {
-      return `${segmentOverridePrefixString}[${rm.text}]`;
+      return `${segmentOverridePrefixString}[${operand.text}]`;
     }
   }
-}
-
-function printOpDestSizedDataInstruction(
-  op: string,
-  instruction: { dest: RegisterOrEac; data: number },
-): string {
-  const destString = printRegisterOrEac(instruction.dest);
-
-  let dataString: string;
-  if (instruction.dest.kind === 'reg') {
-    dataString = instruction.data.toString();
-  } else {
-    dataString = printDataWithSize(instruction.data);
-  }
-
-  return `${op} ${destString}, ${dataString}`;
 }
 
 function printSignedAsOperation(val: number): string {
@@ -445,11 +244,6 @@ function printSignedAsOperation(val: number): string {
   } else {
     return `- ${Math.abs(val)}`;
   }
-}
-
-function printDataWithSize(val: number): string {
-  const sizeLabel = val > 255 ? 'word' : 'byte';
-  return `${sizeLabel} ${val}`;
 }
 
 const zeroString = '0';
