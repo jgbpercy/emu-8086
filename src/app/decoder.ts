@@ -309,8 +309,9 @@ export type PopRegisterMemoryInstruction = _OneOperandInstruction<
   RegisterOrEac
 >;
 
-export type XchgRegisterWithAccumulatorInstruction = _OneOperandInstruction<
+export type XchgRegisterWithAccumulatorInstruction = _TwoOperandInstruction<
   'xchgRegisterWithAccumulator',
+  typeof axReg,
   WordRegister
 >;
 
@@ -337,8 +338,8 @@ export type LahfLoadAhWithFlagsInstruction = _NoOperandInstruction<'lahfLoadAhWi
 
 export type MovMemoryToFromAccumulatorInstruction = _TwoOperandInstruction<
   'movMemoryToFromAccumulator',
-  AccumulatorRegister | { kind: 'mem'; text: 'DIRECT ADDRESS'; displacement: number },
-  AccumulatorRegister | { kind: 'mem'; text: 'DIRECT ADDRESS'; displacement: number }
+  AccumulatorRegister | { kind: 'mem'; text: 'DIRECT ADDRESS'; displacement: number; length: null },
+  AccumulatorRegister | { kind: 'mem'; text: 'DIRECT ADDRESS'; displacement: number; length: null }
 >;
 
 export type MovsMoveByteWordInstruction = _NoOperandInstruction<'movsMoveByteWord'> &
@@ -485,8 +486,8 @@ export type InFixedPortInstruction = _TwoOperandInstruction<
 
 export type OutFixedPortInstruction = _TwoOperandInstruction<
   'outFixedPort',
-  AccumulatorRegister,
-  number
+  number,
+  AccumulatorRegister
 >;
 
 export type CallDirectWithinSegmentInstruction = _OneOperandInstruction<
@@ -510,13 +511,15 @@ export type JmpDirectWithinSegmentShortInstruction = _OneOperandInstruction<
   number
 >;
 
-export type InVariablePortInstruction = _OneOperandInstruction<
+export type InVariablePortInstruction = _TwoOperandInstruction<
   'inVariablePort',
-  AccumulatorRegister
+  AccumulatorRegister,
+  typeof dxReg
 >;
 
-export type OutVariablePortInstruction = _OneOperandInstruction<
+export type OutVariablePortInstruction = _TwoOperandInstruction<
   'outVariablePortInstruction',
+  typeof dxReg,
   AccumulatorRegister
 >;
 
@@ -797,16 +800,17 @@ type WordRegister =
   | typeof siReg
   | typeof diReg;
 
-type _EffectiveAddressCalculationCategory =
-  | { kind: 'eac'; text: 'bx + si'; displacementBytes: 0 | 1 | 2 }
-  | { kind: 'eac'; text: 'bx + di'; displacementBytes: 0 | 1 | 2 }
-  | { kind: 'eac'; text: 'bp + si'; displacementBytes: 0 | 1 | 2 }
-  | { kind: 'eac'; text: 'bp + di'; displacementBytes: 0 | 1 | 2 }
-  | { kind: 'eac'; text: 'si'; displacementBytes: 0 | 1 | 2 }
-  | { kind: 'eac'; text: 'di'; displacementBytes: 0 | 1 | 2 }
-  | { kind: 'eac'; text: 'DIRECT ADDRESS'; displacementBytes: 2 }
-  | { kind: 'eac'; text: 'bx'; displacementBytes: 0 | 1 | 2 }
-  | { kind: 'eac'; text: 'bp'; displacementBytes: 1 | 2 };
+type _EffectiveAddressCalculationCategory = { kind: 'eac' } & (
+  | { text: 'bx + si'; displacementBytes: 0 | 1 | 2 }
+  | { text: 'bx + di'; displacementBytes: 0 | 1 | 2 }
+  | { text: 'bp + si'; displacementBytes: 0 | 1 | 2 }
+  | { text: 'bp + di'; displacementBytes: 0 | 1 | 2 }
+  | { text: 'si'; displacementBytes: 0 | 1 | 2 }
+  | { text: 'di'; displacementBytes: 0 | 1 | 2 }
+  | { text: 'DIRECT ADDRESS'; displacementBytes: 2 }
+  | { text: 'bx'; displacementBytes: 0 | 1 | 2 }
+  | { text: 'bp'; displacementBytes: 1 | 2 }
+);
 
 type EffectiveAddressCalculationCategory = { kind: 'eac' } & _EffectiveAddressCalculationCategory;
 
@@ -819,6 +823,7 @@ export interface EffectiveAddressCalculation {
   readonly text: EffectiveAddressCalculationCategory['text'];
   readonly displacement: number | null;
   readonly segmentOverridePrefix?: SegmentRegister;
+  readonly length: 2 | 1 | null;
 }
 
 export type RegisterOrEac = Register | EffectiveAddressCalculation;
@@ -1795,7 +1800,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
         break;
       }
 
-      const dest = decodeRegisterOrEffectiveAddressCalculation(context, destRm);
+      const dest = decodeRegisterOrEffectiveAddressCalculation(context, destRm, wBit ? 2 : 1);
 
       const wBitForDataDecode = wBit && !sBit ? 1 : 0;
 
@@ -1843,6 +1848,20 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       context.lock = false;
 
+      if (lock && source.kind === 'mem') {
+        // Swap mem to be the dest if locked because nasm doesn't like it otherwise
+        // https://bugzilla.nasm.us/show_bug.cgi?id=3392838#c2
+
+        instruction = {
+          kind: 'xchgRegisterMemoryWithRegister',
+          op1: source,
+          op2: dest,
+          lock,
+        };
+
+        break;
+      }
+
       instruction = {
         kind: 'xchgRegisterMemoryWithRegister',
         op1: dest,
@@ -1884,7 +1903,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       const source = segmentRegisterTable[srBits >> 3];
 
-      const dest = decodeRegisterOrEffectiveAddressCalculation(context, destRm);
+      const dest = decodeRegisterOrEffectiveAddressCalculation(context, destRm, null);
 
       instruction = {
         kind: 'movSegmentRegisterToRegisterMemory',
@@ -1906,7 +1925,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
         );
       }
 
-      const source = decodeEffectiveAddressCalculation(context, sourceCategory);
+      const source = decodeEffectiveAddressCalculation(context, sourceCategory, null);
 
       instruction = {
         kind: 'leaLoadEaToRegister',
@@ -1930,7 +1949,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       const dest = segmentRegisterTable[srBits >> 3];
 
-      const source = decodeRegisterOrEffectiveAddressCalculation(context, sourceRm);
+      const source = decodeRegisterOrEffectiveAddressCalculation(context, sourceRm, null);
 
       instruction = {
         kind: 'movRegisterMemoryToSegmentRegister',
@@ -1952,7 +1971,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
         );
       }
 
-      const dest = decodeRegisterOrEffectiveAddressCalculation(context, destRm);
+      const dest = decodeRegisterOrEffectiveAddressCalculation(context, destRm, 2);
 
       instruction = {
         kind: 'popRegisterMemory',
@@ -1979,7 +1998,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'xchgRegisterWithAccumulator',
-        op1: source,
+        op1: axReg,
+        op2: source,
       };
 
       break;
@@ -2088,6 +2108,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
         kind: 'mem',
         text: 'DIRECT ADDRESS',
         displacement,
+        length: null,
       } satisfies EffectiveAddressCalculation;
 
       instruction = {
@@ -2265,7 +2286,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       const dest = wordRegisterTable[regBits >> 3];
 
-      const source = decodeEffectiveAddressCalculation(context, sourceEacCategory);
+      const source = decodeEffectiveAddressCalculation(context, sourceEacCategory, null);
 
       instruction = {
         kind: 0b0000_0001 & firstByte ? 'ldsLoadPointerToDs' : 'lesLoadPointerToEs',
@@ -2291,7 +2312,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
         );
       }
 
-      const dest = decodeRegisterOrEffectiveAddressCalculation(context, destRm);
+      const dest = decodeRegisterOrEffectiveAddressCalculation(context, destRm, wBit ? 2 : 1);
 
       const data = decodeIntLiteralData(context, wBit);
 
@@ -2402,7 +2423,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
         );
       }
 
-      const dest = decodeRegisterOrEffectiveAddressCalculation(context, destRm);
+      const dest = decodeRegisterOrEffectiveAddressCalculation(context, destRm, wBit ? 2 : 1);
 
       const source: LogicWithOneOrClInstruction['op2'] = vBit ? clReg : 1;
 
@@ -2484,7 +2505,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
       // but this seems to be what the manual says
       const fullOpCode = (firstOpCodePart << 3) + (secondOpCodePart >> 3);
 
-      const source = decodeRegisterOrEffectiveAddressCalculation(context, sourceRm);
+      const source = decodeRegisterOrEffectiveAddressCalculation(context, sourceRm, null);
 
       instruction = {
         kind: 'escEscapeToExternalDevice',
@@ -2523,15 +2544,23 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
       const instructionKind: InFixedPortInstruction['kind'] | OutFixedPortInstruction['kind'] =
         instructionBit ? 'outFixedPort' : 'inFixedPort';
 
-      const dest = wBit ? axReg : alReg;
+      const reg = wBit ? axReg : alReg;
 
       const data = decodeIntLiteralData(context, 0);
 
-      instruction = {
-        kind: instructionKind,
-        op1: dest,
-        op2: data,
-      };
+      if (instructionKind === 'inFixedPort') {
+        instruction = {
+          kind: instructionKind,
+          op1: reg,
+          op2: data,
+        };
+      } else {
+        instruction = {
+          kind: instructionKind,
+          op1: data,
+          op2: reg,
+        };
+      }
 
       break;
     }
@@ -2605,12 +2634,21 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
         ? 'outVariablePortInstruction'
         : 'inVariablePort';
 
-      const dest = wBit ? axReg : alReg;
+      const reg = wBit ? axReg : alReg;
 
-      instruction = {
-        kind: instructionKind,
-        op1: dest,
-      };
+      if (instructionKind === 'inVariablePort') {
+        instruction = {
+          kind: instructionKind,
+          op1: reg,
+          op2: dxReg,
+        };
+      } else {
+        instruction = {
+          kind: instructionKind,
+          op1: dxReg,
+          op2: reg,
+        };
+      }
 
       break;
     }
@@ -2688,7 +2726,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       const [opCodeBits, destRm] = decodeMiddleThreeBitsAndModRm(context, wBit);
 
-      const dest = decodeRegisterOrEffectiveAddressCalculation(context, destRm);
+      const dest = decodeRegisterOrEffectiveAddressCalculation(context, destRm, wBit ? 2 : 1);
 
       // test Immediate data and register/memory
       if (opCodeBits === 0b0000_0000) {
@@ -2793,7 +2831,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       const [opCodeBits, destRm] = decodeMiddleThreeBitsAndModRm(context, wBit);
 
-      const dest = decodeRegisterOrEffectiveAddressCalculation(context, destRm);
+      const dest = decodeRegisterOrEffectiveAddressCalculation(context, destRm, wBit ? 2 : 1);
 
       const instructionKind = miscFfByteInstructionTable[opCodeBits >> 3];
 
@@ -2876,11 +2914,11 @@ function decodeDestSourceForModRegRmInstruction(
     assertIsRegister(sourceRm);
     source = sourceRm;
 
-    dest = decodeEffectiveAddressCalculation(context, destRm);
+    dest = decodeEffectiveAddressCalculation(context, destRm, null);
   } else if (sourceRm.kind === 'eac') {
     dest = destRm;
 
-    source = decodeEffectiveAddressCalculation(context, sourceRm);
+    source = decodeEffectiveAddressCalculation(context, sourceRm, null);
   } else {
     dest = destRm;
     source = sourceRm;
@@ -2938,11 +2976,12 @@ function assertIsRegister(rm: RegisterOrEacCategory): asserts rm is Register {
 function decodeRegisterOrEffectiveAddressCalculation(
   context: DecodingContext,
   registerOrEacCategory: RegisterOrEacCategory,
+  length: 2 | 1 | null,
 ): RegisterOrEac {
   if (registerOrEacCategory.kind === 'reg') {
     return registerOrEacCategory;
   } else {
-    return decodeEffectiveAddressCalculation(context, registerOrEacCategory);
+    return decodeEffectiveAddressCalculation(context, registerOrEacCategory, length);
   }
 }
 
@@ -2951,6 +2990,7 @@ function decodeRegisterOrEffectiveAddressCalculation(
 function decodeEffectiveAddressCalculation(
   context: DecodingContext,
   category: EffectiveAddressCalculationCategory,
+  length: 2 | 1 | null,
 ): EffectiveAddressCalculation {
   let displacement: number | null;
 
@@ -2975,7 +3015,13 @@ function decodeEffectiveAddressCalculation(
     context.segmentOverridePrefix = undefined;
   }
 
-  return { kind: 'mem', text: category.text, displacement, segmentOverridePrefix };
+  return {
+    kind: 'mem',
+    text: category.text,
+    displacement,
+    segmentOverridePrefix,
+    length,
+  };
 }
 
 function getAsTwosComplement(val: number, max: 128 | 32768): number {

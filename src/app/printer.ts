@@ -197,6 +197,14 @@ const mnemonicsTable = {
 } satisfies Readonly<Record<DecodedInstruction['kind'], string>>;
 
 function printInstruction(instruction: DecodedInstruction): string {
+  if (
+    instruction.kind === 'callDirectIntersegment' ||
+    instruction.kind === 'jmpDirectIntersegment'
+  ) {
+    // These have special syntax because why not
+    return `${mnemonicsTable[instruction.kind]} ${instruction.op1}:${instruction.op2}`;
+  }
+
   const lockPrefix = 'lock' in instruction && instruction.lock ? 'lock ' : '';
 
   const repPrefix = 'rep' in instruction && instruction.rep !== null ? instruction.rep : '';
@@ -220,20 +228,34 @@ function printOperand(operand: Operand): string {
   } else if (operand.kind === 'reg') {
     return operand.register;
   } else {
+    let lengthPrefixString: string;
+
+    switch (operand.length) {
+      case null:
+        lengthPrefixString = '';
+        break;
+      case 1:
+        lengthPrefixString = 'byte ';
+        break;
+      case 2:
+        lengthPrefixString = 'word ';
+        break;
+    }
+
     const segmentOverridePrefixString = operand.segmentOverridePrefix
       ? `${operand.segmentOverridePrefix}: `
       : '';
 
     if (operand.displacement !== null && operand.displacement !== 0) {
       if (operand.text === 'DIRECT ADDRESS') {
-        return `${segmentOverridePrefixString}[${operand.displacement}]`;
+        return `${lengthPrefixString}${segmentOverridePrefixString}[${operand.displacement}]`;
       } else {
         const signedDisplacementString = printSignedAsOperation(operand.displacement);
 
-        return `${segmentOverridePrefixString}[${operand.text} ${signedDisplacementString}]`;
+        return `${lengthPrefixString}${segmentOverridePrefixString}[${operand.text} ${signedDisplacementString}]`;
       }
     } else {
-      return `${segmentOverridePrefixString}[${operand.text}]`;
+      return `${lengthPrefixString}${segmentOverridePrefixString}[${operand.text}]`;
     }
   }
 }
