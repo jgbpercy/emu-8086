@@ -1,59 +1,101 @@
-import { DecodedInstruction, DecodedInstructionWithByteIndex, Operand } from './decoder';
+import {
+  DecodedInstruction,
+  DecodedInstructionWithByteIndex,
+  EffectiveAddressCalculation,
+  Operand,
+} from './decoder';
 
 const bitsDirective = 'bits 16';
 
-export function printDecodedInstructions(instructions: ReadonlyArray<DecodedInstruction>): string {
-  const instructionStrings = new Array<string>(instructions.length + 1);
-
-  instructionStrings[0] = bitsDirective;
-
-  let index = 1;
-
-  for (const instruction of instructions) {
-    instructionStrings[index] = printInstruction(instruction);
-
-    index++;
-  }
-
-  return instructionStrings.join('\n');
+export interface PrinterSettings {
+  readonly mnemonicCaps?: boolean;
+  readonly registerCaps?: boolean;
+  readonly keywordCaps?: boolean;
+  readonly spaceBetweenOperands?: boolean;
+  readonly spacesInAddressCalculation?: boolean;
+  readonly spaceAfterSegmentOverridePrefix?: boolean;
+  readonly annotateBytes?:
+    | false
+    | {
+        readonly position: 'above' | 'after';
+        readonly format: 'binary' | 'decimal' | 'hex';
+      };
 }
 
-export function printDecodedInstructionsWithBytes(
+const defaultSettings: Required<PrinterSettings> = {
+  mnemonicCaps: false,
+  registerCaps: false,
+  keywordCaps: false,
+  spaceBetweenOperands: true,
+  spacesInAddressCalculation: true,
+  spaceAfterSegmentOverridePrefix: true,
+  annotateBytes: false,
+};
+
+export function printDecodedInstructions(
   instructionsWithByteIndices: ReadonlyArray<DecodedInstructionWithByteIndex>,
   instructionBytes: Uint8Array,
+  _settings?: PrinterSettings,
 ): string {
-  const strings = new Array<string>(instructionsWithByteIndices.length * 2 + 1);
+  const settings: Required<PrinterSettings> = { ...defaultSettings, ..._settings };
 
-  strings[0] = bitsDirective + '\n';
+  const strings = new Array<string>(instructionsWithByteIndices.length + 1);
 
-  let stringsIndex = 1;
+  strings[0] = settings.keywordCaps ? bitsDirective.toUpperCase() : bitsDirective;
+
   let instructionIndex = 0;
+  let stringIndex = 1;
 
   for (const [byteIndex, instruction] of instructionsWithByteIndices) {
-    let nextInstructionByteIndex: number;
+    const instructionString = printInstruction(instruction, settings);
 
-    if (instructionIndex === instructionsWithByteIndices.length - 1) {
-      nextInstructionByteIndex = instructionBytes.length;
+    if (!settings.annotateBytes) {
+      strings[stringIndex] = instructionString;
     } else {
-      nextInstructionByteIndex = instructionsWithByteIndices[instructionIndex + 1][0];
+      let nextInstructionByteIndex: number;
+
+      if (instructionIndex === instructionsWithByteIndices.length - 1) {
+        nextInstructionByteIndex = instructionBytes.length;
+      } else {
+        nextInstructionByteIndex = instructionsWithByteIndices[instructionIndex + 1][0];
+      }
+
+      const byteStrings = new Array<string>(nextInstructionByteIndex - byteIndex);
+      for (
+        let byteIndexOffset = 0;
+        byteIndex + byteIndexOffset < nextInstructionByteIndex;
+        byteIndexOffset++
+      ) {
+        const byte = instructionBytes[byteIndex + byteIndexOffset];
+        switch (settings.annotateBytes.format) {
+          case 'binary':
+            byteStrings[byteIndexOffset] = toByteString(byte);
+            break;
+          case 'hex':
+            byteStrings[byteIndexOffset] = byte.toString(16);
+            break;
+          case 'decimal':
+            byteStrings[byteIndexOffset] = byte.toString(10);
+            break;
+        }
+      }
+
+      const annotation =
+        settings.annotateBytes.format === 'binary'
+          ? byteStrings.join('  |  ')
+          : byteStrings.join(' ');
+
+      switch (settings.annotateBytes.position) {
+        case 'above':
+          strings[stringIndex] = `; ${annotation}\n${instructionString}`;
+          break;
+        case 'after':
+          strings[stringIndex] = `${instructionString} ; ${annotation}`;
+          break;
+      }
     }
 
-    const byteStrings = new Array<string>(nextInstructionByteIndex - byteIndex);
-    for (
-      let byteIndexOffset = 0;
-      byteIndex + byteIndexOffset < nextInstructionByteIndex;
-      byteIndexOffset++
-    ) {
-      byteStrings[byteIndexOffset] = toByteString(instructionBytes[byteIndex + byteIndexOffset]);
-    }
-
-    strings[stringsIndex] = byteStrings.join('  |  ');
-
-    stringsIndex++;
-
-    strings[stringsIndex] = printInstruction(instruction) + '\n';
-
-    stringsIndex++;
+    stringIndex++;
     instructionIndex++;
   }
 
@@ -196,7 +238,51 @@ const mnemonicsTable = {
   UNKNOWN: 'UNKNOWN',
 } satisfies Readonly<Record<DecodedInstruction['kind'], string>>;
 
-function printInstruction(instruction: DecodedInstruction): string {
+const mnemonicsTableUpper = mapValuesToUpper(mnemonicsTable);
+
+type EacStringTable = Readonly<
+  Record<Exclude<EffectiveAddressCalculation['calculationKind'], 'DIRECT ADDRESS'>, string>
+>;
+
+const eacStringTable = {
+  bp: 'bp',
+  bx: 'bx',
+  di: 'di',
+  si: 'si',
+  'bp + di': 'bp + di',
+  'bp + si': 'bp + si',
+  'bx + di': 'bx + di',
+  'bx + si': 'bx + si',
+} satisfies EacStringTable;
+
+const eacStringTableNoSpaces = {
+  bp: 'bp',
+  bx: 'bx',
+  di: 'di',
+  si: 'si',
+  'bp + di': 'bp+di',
+  'bp + si': 'bp+si',
+  'bx + di': 'bx+di',
+  'bx + si': 'bx+si',
+} satisfies EacStringTable;
+
+const eacStringTableUpper = mapValuesToUpper(eacStringTable);
+
+const eacStringTableUpperNoSpaces = mapValuesToUpper(eacStringTableNoSpaces);
+
+// Make copy of a table but with upper case vals (type hackery be here!)
+function mapValuesToUpper<T extends Readonly<Record<string, string>>>(original: T): T {
+  const copy = Object.fromEntries(
+    Object.keys(original).map((key) => [key, original[key as keyof typeof original].toUpperCase()]),
+  ) as typeof original;
+
+  return copy;
+}
+
+function printInstruction(
+  instruction: DecodedInstruction,
+  settings: Required<PrinterSettings>,
+): string {
   if (
     instruction.kind === 'callDirectIntersegment' ||
     instruction.kind === 'jmpDirectIntersegment'
@@ -205,28 +291,73 @@ function printInstruction(instruction: DecodedInstruction): string {
     return `${mnemonicsTable[instruction.kind]} ${instruction.op1}:${instruction.op2}`;
   }
 
-  const lockPrefix = 'lock' in instruction && instruction.lock ? 'lock ' : '';
+  let lockPrefix: string;
+  if ('lock' in instruction && instruction.lock) {
+    if (settings.mnemonicCaps) {
+      lockPrefix = 'LOCK ';
+    } else {
+      lockPrefix = 'lock ';
+    }
+  } else {
+    lockPrefix = '';
+  }
 
-  const repPrefix = 'rep' in instruction && instruction.rep !== null ? instruction.rep : '';
+  let repPrefix: string;
+  if ('rep' in instruction && instruction.rep !== null) {
+    if (settings.mnemonicCaps) {
+      repPrefix = instruction.rep.toUpperCase();
+    } else {
+      repPrefix = instruction.rep;
+    }
+  } else {
+    repPrefix = '';
+  }
 
-  const mnemonic = mnemonicsTable[instruction.kind];
+  const mnemonic = settings.mnemonicCaps
+    ? mnemonicsTableUpper[instruction.kind]
+    : mnemonicsTable[instruction.kind];
 
-  const wbSuffix = 'word' in instruction ? (instruction.word ? 'w' : 'b') : '';
+  let wbSuffix: string;
+  if ('word' in instruction) {
+    if (settings.mnemonicCaps) {
+      wbSuffix = instruction.word ? 'W' : 'B';
+    } else {
+      wbSuffix = instruction.word ? 'w' : 'b';
+    }
+  } else {
+    wbSuffix = '';
+  }
 
-  const op1 = 'op1' in instruction ? ` ${printOperand(instruction.op1)}` : '';
+  let op1: string;
+  if ('op1' in instruction) {
+    op1 = ` ${printOperand(instruction.op1, settings)}`;
+  } else {
+    op1 = '';
+  }
 
-  const op2 = 'op2' in instruction ? `, ${printOperand(instruction.op2)}` : '';
+  let op2: string;
+  if ('op2' in instruction) {
+    const op2Itself = printOperand(instruction.op2, settings);
+
+    if (settings.spaceBetweenOperands) {
+      op2 = `, ${op2Itself}`;
+    } else {
+      op2 = `,${op2Itself}`;
+    }
+  } else {
+    op2 = '';
+  }
 
   return `${lockPrefix}${repPrefix}${mnemonic}${wbSuffix}${op1}${op2}`;
 }
 
-function printOperand(operand: Operand): string {
+function printOperand(operand: Operand, settings: Required<PrinterSettings>): string {
   if (typeof operand === 'string') {
-    return operand;
+    return settings.registerCaps ? operand.toUpperCase() : operand;
   } else if (typeof operand === 'number') {
     return operand.toString();
   } else if (operand.kind === 'reg') {
-    return operand.register;
+    return settings.registerCaps ? operand.register.toUpperCase() : operand.register;
   } else {
     let lengthPrefixString: string;
 
@@ -235,36 +366,71 @@ function printOperand(operand: Operand): string {
         lengthPrefixString = '';
         break;
       case 1:
-        lengthPrefixString = 'byte ';
+        lengthPrefixString = settings.keywordCaps ? 'BYTE ' : 'byte ';
         break;
       case 2:
-        lengthPrefixString = 'word ';
+        lengthPrefixString = settings.keywordCaps ? 'WORD ' : 'word ';
         break;
     }
 
-    const segmentOverridePrefixString = operand.segmentOverridePrefix
-      ? `${operand.segmentOverridePrefix}: `
-      : '';
-
-    if (operand.displacement !== null && operand.displacement !== 0) {
-      if (operand.text === 'DIRECT ADDRESS') {
-        return `${lengthPrefixString}${segmentOverridePrefixString}[${operand.displacement}]`;
+    let segmentOverridePrefixString: string;
+    if (operand.segmentOverridePrefix) {
+      if (settings.registerCaps) {
+        const segmentOverridePrefixUpper = operand.segmentOverridePrefix.toUpperCase();
+        if (settings.spaceAfterSegmentOverridePrefix) {
+          segmentOverridePrefixString = `${segmentOverridePrefixUpper}: `;
+        } else {
+          segmentOverridePrefixString = `${segmentOverridePrefixUpper}:`;
+        }
       } else {
-        const signedDisplacementString = printSignedAsOperation(operand.displacement);
-
-        return `${lengthPrefixString}${segmentOverridePrefixString}[${operand.text} ${signedDisplacementString}]`;
+        if (settings.spaceAfterSegmentOverridePrefix) {
+          segmentOverridePrefixString = `${operand.segmentOverridePrefix}: `;
+        } else {
+          segmentOverridePrefixString = `${operand.segmentOverridePrefix}:`;
+        }
       }
     } else {
-      return `${lengthPrefixString}${segmentOverridePrefixString}[${operand.text}]`;
+      segmentOverridePrefixString = '';
     }
+
+    if (operand.calculationKind === 'DIRECT ADDRESS') {
+      return `${lengthPrefixString}${segmentOverridePrefixString}[${operand.displacement ?? 0}]`;
+    }
+
+    let calculationString: string;
+    if (settings.spacesInAddressCalculation) {
+      if (settings.registerCaps) {
+        calculationString = eacStringTableUpper[operand.calculationKind];
+      } else {
+        calculationString = eacStringTable[operand.calculationKind];
+      }
+    } else {
+      if (settings.registerCaps) {
+        calculationString = eacStringTableUpperNoSpaces[operand.calculationKind];
+      } else {
+        calculationString = eacStringTableNoSpaces[operand.calculationKind];
+      }
+    }
+
+    let displacementString: string;
+    if (operand.displacement !== null && operand.displacement !== 0) {
+      displacementString = printSignedAsOperation(
+        operand.displacement,
+        settings.spacesInAddressCalculation,
+      );
+    } else {
+      displacementString = '';
+    }
+
+    return `${lengthPrefixString}${segmentOverridePrefixString}[${calculationString}${displacementString}]`;
   }
 }
 
-function printSignedAsOperation(val: number): string {
+function printSignedAsOperation(val: number, spaces: boolean): string {
   if (val >= 0) {
-    return `+ ${val}`;
+    return spaces ? ` + ${val}` : `+${val}`;
   } else {
-    return `- ${Math.abs(val)}`;
+    return spaces ? ` - ${Math.abs(val)}` : `-${Math.abs(val)}`;
   }
 }
 

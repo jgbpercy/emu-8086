@@ -338,8 +338,10 @@ export type LahfLoadAhWithFlagsInstruction = _NoOperandInstruction<'lahfLoadAhWi
 
 export type MovMemoryToFromAccumulatorInstruction = _TwoOperandInstruction<
   'movMemoryToFromAccumulator',
-  AccumulatorRegister | { kind: 'mem'; text: 'DIRECT ADDRESS'; displacement: number; length: null },
-  AccumulatorRegister | { kind: 'mem'; text: 'DIRECT ADDRESS'; displacement: number; length: null }
+  | AccumulatorRegister
+  | { kind: 'mem'; calculationKind: 'DIRECT ADDRESS'; displacement: number; length: null },
+  | AccumulatorRegister
+  | { kind: 'mem'; calculationKind: 'DIRECT ADDRESS'; displacement: number; length: null }
 >;
 
 export type MovsMoveByteWordInstruction = _NoOperandInstruction<'movsMoveByteWord'> &
@@ -801,15 +803,15 @@ type WordRegister =
   | typeof diReg;
 
 type _EffectiveAddressCalculationCategory = { kind: 'eac' } & (
-  | { text: 'bx + si'; displacementBytes: 0 | 1 | 2 }
-  | { text: 'bx + di'; displacementBytes: 0 | 1 | 2 }
-  | { text: 'bp + si'; displacementBytes: 0 | 1 | 2 }
-  | { text: 'bp + di'; displacementBytes: 0 | 1 | 2 }
-  | { text: 'si'; displacementBytes: 0 | 1 | 2 }
-  | { text: 'di'; displacementBytes: 0 | 1 | 2 }
-  | { text: 'DIRECT ADDRESS'; displacementBytes: 2 }
-  | { text: 'bx'; displacementBytes: 0 | 1 | 2 }
-  | { text: 'bp'; displacementBytes: 1 | 2 }
+  | { calculationKind: 'bx + si'; displacementBytes: 0 | 1 | 2 }
+  | { calculationKind: 'bx + di'; displacementBytes: 0 | 1 | 2 }
+  | { calculationKind: 'bp + si'; displacementBytes: 0 | 1 | 2 }
+  | { calculationKind: 'bp + di'; displacementBytes: 0 | 1 | 2 }
+  | { calculationKind: 'si'; displacementBytes: 0 | 1 | 2 }
+  | { calculationKind: 'di'; displacementBytes: 0 | 1 | 2 }
+  | { calculationKind: 'DIRECT ADDRESS'; displacementBytes: 2 }
+  | { calculationKind: 'bx'; displacementBytes: 0 | 1 | 2 }
+  | { calculationKind: 'bp'; displacementBytes: 1 | 2 }
 );
 
 type EffectiveAddressCalculationCategory = { kind: 'eac' } & _EffectiveAddressCalculationCategory;
@@ -820,7 +822,7 @@ export type RegisterOrEacCategory = Register | EffectiveAddressCalculationCatego
 
 export interface EffectiveAddressCalculation {
   readonly kind: 'mem';
-  readonly text: EffectiveAddressCalculationCategory['text'];
+  readonly calculationKind: EffectiveAddressCalculationCategory['calculationKind'];
   readonly displacement: number | null;
   readonly segmentOverridePrefix?: SegmentRegister;
   readonly length: 2 | 1 | null;
@@ -903,53 +905,53 @@ const wordRegisterTable: ReadonlyArray<WordRegister> = [
 // table 4-10
 const effectiveAddressTable: Readonly<Record<number, EffectiveAddressCalculationCategory>> = {
   // mod 00, rm 000
-  [0b0000_0000]: { kind: 'eac', text: 'bx + si', displacementBytes: 0 },
+  [0b0000_0000]: { kind: 'eac', calculationKind: 'bx + si', displacementBytes: 0 },
   // mod 00, rm 001
-  [0b0000_0001]: { kind: 'eac', text: 'bx + di', displacementBytes: 0 },
+  [0b0000_0001]: { kind: 'eac', calculationKind: 'bx + di', displacementBytes: 0 },
   // mod 00, rm 010
-  [0b0000_0010]: { kind: 'eac', text: 'bp + si', displacementBytes: 0 },
+  [0b0000_0010]: { kind: 'eac', calculationKind: 'bp + si', displacementBytes: 0 },
   // mod 00, rm 011
-  [0b0000_0011]: { kind: 'eac', text: 'bp + di', displacementBytes: 0 },
+  [0b0000_0011]: { kind: 'eac', calculationKind: 'bp + di', displacementBytes: 0 },
   // mod 00, rm 100
-  [0b0000_0100]: { kind: 'eac', text: 'si', displacementBytes: 0 },
+  [0b0000_0100]: { kind: 'eac', calculationKind: 'si', displacementBytes: 0 },
   // mod 00, rm 101
-  [0b0000_0101]: { kind: 'eac', text: 'di', displacementBytes: 0 },
+  [0b0000_0101]: { kind: 'eac', calculationKind: 'di', displacementBytes: 0 },
   // mod 00, rm 110
-  [0b0000_0110]: { kind: 'eac', text: 'DIRECT ADDRESS', displacementBytes: 2 },
+  [0b0000_0110]: { kind: 'eac', calculationKind: 'DIRECT ADDRESS', displacementBytes: 2 },
   // mod 00, rm 111
-  [0b0000_0111]: { kind: 'eac', text: 'bx', displacementBytes: 0 },
+  [0b0000_0111]: { kind: 'eac', calculationKind: 'bx', displacementBytes: 0 },
   // mod 01, rm 000
-  [0b0100_0000]: { kind: 'eac', text: 'bx + si', displacementBytes: 1 },
+  [0b0100_0000]: { kind: 'eac', calculationKind: 'bx + si', displacementBytes: 1 },
   // mod 01, rm 001
-  [0b0100_0001]: { kind: 'eac', text: 'bx + di', displacementBytes: 1 },
+  [0b0100_0001]: { kind: 'eac', calculationKind: 'bx + di', displacementBytes: 1 },
   // mod 01, rm 010
-  [0b0100_0010]: { kind: 'eac', text: 'bp + si', displacementBytes: 1 },
+  [0b0100_0010]: { kind: 'eac', calculationKind: 'bp + si', displacementBytes: 1 },
   // mod 01, rm 011
-  [0b0100_0011]: { kind: 'eac', text: 'bp + di', displacementBytes: 1 },
+  [0b0100_0011]: { kind: 'eac', calculationKind: 'bp + di', displacementBytes: 1 },
   // mod 01, rm 100
-  [0b0100_0100]: { kind: 'eac', text: 'si', displacementBytes: 1 },
+  [0b0100_0100]: { kind: 'eac', calculationKind: 'si', displacementBytes: 1 },
   // mod 01, rm 101
-  [0b0100_0101]: { kind: 'eac', text: 'di', displacementBytes: 1 },
+  [0b0100_0101]: { kind: 'eac', calculationKind: 'di', displacementBytes: 1 },
   // mod 01, rm 110
-  [0b0100_0110]: { kind: 'eac', text: 'bp', displacementBytes: 1 },
+  [0b0100_0110]: { kind: 'eac', calculationKind: 'bp', displacementBytes: 1 },
   // mod 01, rm 111
-  [0b0100_0111]: { kind: 'eac', text: 'bx', displacementBytes: 1 },
+  [0b0100_0111]: { kind: 'eac', calculationKind: 'bx', displacementBytes: 1 },
   // mod 10, rm 000
-  [0b1000_0000]: { kind: 'eac', text: 'bx + si', displacementBytes: 2 },
+  [0b1000_0000]: { kind: 'eac', calculationKind: 'bx + si', displacementBytes: 2 },
   // mod 10, rm 001
-  [0b1000_0001]: { kind: 'eac', text: 'bx + di', displacementBytes: 2 },
+  [0b1000_0001]: { kind: 'eac', calculationKind: 'bx + di', displacementBytes: 2 },
   // mod 10, rm 010
-  [0b1000_0010]: { kind: 'eac', text: 'bp + si', displacementBytes: 2 },
+  [0b1000_0010]: { kind: 'eac', calculationKind: 'bp + si', displacementBytes: 2 },
   // mod 10, rm 011
-  [0b1000_0011]: { kind: 'eac', text: 'bp + di', displacementBytes: 2 },
+  [0b1000_0011]: { kind: 'eac', calculationKind: 'bp + di', displacementBytes: 2 },
   // mod 10, rm 100
-  [0b1000_0100]: { kind: 'eac', text: 'si', displacementBytes: 2 },
+  [0b1000_0100]: { kind: 'eac', calculationKind: 'si', displacementBytes: 2 },
   // mod 10, rm 101
-  [0b1000_0101]: { kind: 'eac', text: 'di', displacementBytes: 2 },
+  [0b1000_0101]: { kind: 'eac', calculationKind: 'di', displacementBytes: 2 },
   // mod 10, rm 110
-  [0b1000_0110]: { kind: 'eac', text: 'bp', displacementBytes: 2 },
+  [0b1000_0110]: { kind: 'eac', calculationKind: 'bp', displacementBytes: 2 },
   // mod 10, rm 111
-  [0b1000_0111]: { kind: 'eac', text: 'bx', displacementBytes: 2 },
+  [0b1000_0111]: { kind: 'eac', calculationKind: 'bx', displacementBytes: 2 },
 };
 
 // 70 - 7f in table 4-13
@@ -2106,7 +2108,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       const memoryAddressCalculation = {
         kind: 'mem',
-        text: 'DIRECT ADDRESS',
+        calculationKind: 'DIRECT ADDRESS',
         displacement,
         length: null,
       } satisfies EffectiveAddressCalculation;
@@ -2969,7 +2971,7 @@ function decodeMiddleThreeBitsAndModRm(
 
 function assertIsRegister(rm: RegisterOrEacCategory): asserts rm is Register {
   if (rm.kind === 'eac') {
-    throw new Error(`Expected register, got ${rm.kind} ${rm.text}`);
+    throw new Error(`Expected register, got ${rm.kind} ${rm.calculationKind}`);
   }
 }
 
@@ -3017,7 +3019,7 @@ function decodeEffectiveAddressCalculation(
 
   return {
     kind: 'mem',
-    text: category.text,
+    calculationKind: category.calculationKind,
     displacement,
     segmentOverridePrefix,
     length,

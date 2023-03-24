@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
-import { decodeInstructions, decodeInstructionsAndByteIndices } from './decoder';
-import { printDecodedInstructions, printDecodedInstructionsWithBytes } from './printer';
+import { decodeInstructionsAndByteIndices } from './decoder';
+import { printDecodedInstructions } from './printer';
 
 @Component({
   selector: 'app-root',
@@ -47,10 +47,15 @@ export class AppComponent {
       throw Error('No bytes!');
     }
 
-    const decodedInstructions = decodeInstructions(this.instructionBytes);
+    const decodedInstructionsWithByteIndices = decodeInstructionsAndByteIndices(
+      this.instructionBytes,
+    );
 
-    console.log(decodedInstructions);
-    this.instructionString = printDecodedInstructions(decodedInstructions);
+    console.log(decodedInstructionsWithByteIndices);
+    this.instructionString = printDecodedInstructions(
+      decodedInstructionsWithByteIndices,
+      this.instructionBytes,
+    );
   }
 
   decodeAndPrintWithBytes(): void {
@@ -62,11 +67,13 @@ export class AppComponent {
       this.instructionBytes,
     );
 
-    console.log(printDecodedInstructions);
-
-    this.instructionString = printDecodedInstructionsWithBytes(
+    console.log(decodedInstructionsWithByteIndices);
+    this.instructionString = printDecodedInstructions(
       decodedInstructionsWithByteIndices,
       this.instructionBytes,
+      {
+        annotateBytes: { position: 'above', format: 'binary' },
+      },
     );
   }
 
