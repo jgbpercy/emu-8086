@@ -1,6 +1,11 @@
 import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
-import { decodeInstructionsAndByteIndices } from './decoder';
+import {
+  DecodedInstruction,
+  decodeInstructions,
+  decodeInstructionsAndByteIndices,
+} from './decoder';
+import { AnnotatedBits, encodeAsAnnotatedBits } from './encoder';
 import { printDecodedInstructions } from './printer';
 
 @Component({
@@ -14,6 +19,8 @@ export class AppComponent {
   instructionString = '';
 
   instructionBytes?: Uint8Array;
+
+  annotatedInstructions?: { instruction: DecodedInstruction; bits: ReadonlyArray<AnnotatedBits> }[];
 
   gotFile(evt: Event): void {
     if (evt.target instanceof HTMLInputElement) {
@@ -75,6 +82,20 @@ export class AppComponent {
         annotateBytes: { position: 'above', format: 'binary' },
       },
     );
+  }
+
+  incompleteDecodeAndAnnotate(): void {
+    if (!this.instructionBytes) {
+      throw Error('No bytes!');
+    }
+
+    const decodedInstructions = decodeInstructions(this.instructionBytes);
+
+    console.log(decodedInstructions);
+    this.annotatedInstructions = decodedInstructions.map((instruction) => ({
+      instruction,
+      bits: encodeAsAnnotatedBits(instruction),
+    }));
   }
 
   download(): void {

@@ -1,6 +1,21 @@
 // TODO: consolidate instructions into groups
 // for normal mod/reg/rm instructions, type can be more restricted along these lines:
 
+import {
+  EffectiveAddressCalculationCategory,
+  effectiveAddressDecodingTable,
+} from './effective-address-data';
+import {
+  alReg,
+  axReg,
+  clReg,
+  dxReg,
+  Register,
+  registerDecodingTable,
+  WordRegister,
+  wordRegisterDecodingTable,
+} from './register-data';
+
 // type ModRegRmInstruction = {
 //   readonly dest: RegisterOrEac;
 //   readonly source: Register;
@@ -767,54 +782,7 @@ export type DecodedInstruction =
   | NotUsedInstruction
   | UnknownInstruction;
 
-type _Register =
-  | 'al'
-  | 'bl'
-  | 'cl'
-  | 'dl'
-  | 'ah'
-  | 'bh'
-  | 'ch'
-  | 'dh'
-  | 'ax'
-  | 'bx'
-  | 'cx'
-  | 'dx'
-  | 'sp'
-  | 'bp'
-  | 'si'
-  | 'di';
-
-interface Register {
-  kind: 'reg';
-  register: _Register;
-}
-
 type AccumulatorRegister = typeof alReg | typeof axReg;
-
-type WordRegister =
-  | typeof axReg
-  | typeof bxReg
-  | typeof cxReg
-  | typeof dxReg
-  | typeof spReg
-  | typeof bpReg
-  | typeof siReg
-  | typeof diReg;
-
-type _EffectiveAddressCalculationCategory = { kind: 'eac' } & (
-  | { calculationKind: 'bx + si'; displacementBytes: 0 | 1 | 2 }
-  | { calculationKind: 'bx + di'; displacementBytes: 0 | 1 | 2 }
-  | { calculationKind: 'bp + si'; displacementBytes: 0 | 1 | 2 }
-  | { calculationKind: 'bp + di'; displacementBytes: 0 | 1 | 2 }
-  | { calculationKind: 'si'; displacementBytes: 0 | 1 | 2 }
-  | { calculationKind: 'di'; displacementBytes: 0 | 1 | 2 }
-  | { calculationKind: 'DIRECT ADDRESS'; displacementBytes: 2 }
-  | { calculationKind: 'bx'; displacementBytes: 0 | 1 | 2 }
-  | { calculationKind: 'bp'; displacementBytes: 1 | 2 }
-);
-
-type EffectiveAddressCalculationCategory = { kind: 'eac' } & _EffectiveAddressCalculationCategory;
 
 type SegmentRegister = 'es' | 'cs' | 'ss' | 'ds';
 
@@ -829,130 +797,6 @@ export interface EffectiveAddressCalculation {
 }
 
 export type RegisterOrEac = Register | EffectiveAddressCalculation;
-
-const alReg = { kind: 'reg', register: 'al' } as const;
-const axReg = { kind: 'reg', register: 'ax' } as const;
-const clReg = { kind: 'reg', register: 'cl' } as const;
-const cxReg = { kind: 'reg', register: 'cx' } as const;
-const dlReg = { kind: 'reg', register: 'dl' } as const;
-const dxReg = { kind: 'reg', register: 'dx' } as const;
-const blReg = { kind: 'reg', register: 'bl' } as const;
-const bxReg = { kind: 'reg', register: 'bx' } as const;
-const ahReg = { kind: 'reg', register: 'ah' } as const;
-const spReg = { kind: 'reg', register: 'sp' } as const;
-const chReg = { kind: 'reg', register: 'ch' } as const;
-const bpReg = { kind: 'reg', register: 'bp' } as const;
-const dhReg = { kind: 'reg', register: 'dh' } as const;
-const siReg = { kind: 'reg', register: 'si' } as const;
-const bhReg = { kind: 'reg', register: 'bh' } as const;
-const diReg = { kind: 'reg', register: 'di' } as const;
-
-// table 4-9
-const regTable: ReadonlyArray<Register> = [
-  // reg 000 w 0
-  alReg,
-  // reg 000 w 1
-  axReg,
-  // reg 001 w 0
-  clReg,
-  // reg 001 w 1
-  cxReg,
-  // reg 010 w 0
-  dlReg,
-  // reg 010 w 1
-  dxReg,
-  // reg 011 w 0
-  blReg,
-  // reg 011 w 1
-  bxReg,
-  // reg 100 w 0
-  ahReg,
-  // reg 100 w 1
-  spReg,
-  // reg 101 w 0
-  chReg,
-  // reg 101 w 1
-  bpReg,
-  // reg 110 w 0
-  dhReg,
-  // reg 110 w 1
-  siReg,
-  // reg 111 w 0
-  bhReg,
-  // reg 111 w 1
-  diReg,
-];
-
-const wordRegisterTable: ReadonlyArray<WordRegister> = [
-  // 000
-  axReg,
-  // 001
-  cxReg,
-  // 010
-  dxReg,
-  // 011
-  bxReg,
-  // 100
-  spReg,
-  // 101,
-  bpReg,
-  // 110
-  siReg,
-  // 111
-  diReg,
-];
-
-// table 4-10
-const effectiveAddressTable: Readonly<Record<number, EffectiveAddressCalculationCategory>> = {
-  // mod 00, rm 000
-  [0b0000_0000]: { kind: 'eac', calculationKind: 'bx + si', displacementBytes: 0 },
-  // mod 00, rm 001
-  [0b0000_0001]: { kind: 'eac', calculationKind: 'bx + di', displacementBytes: 0 },
-  // mod 00, rm 010
-  [0b0000_0010]: { kind: 'eac', calculationKind: 'bp + si', displacementBytes: 0 },
-  // mod 00, rm 011
-  [0b0000_0011]: { kind: 'eac', calculationKind: 'bp + di', displacementBytes: 0 },
-  // mod 00, rm 100
-  [0b0000_0100]: { kind: 'eac', calculationKind: 'si', displacementBytes: 0 },
-  // mod 00, rm 101
-  [0b0000_0101]: { kind: 'eac', calculationKind: 'di', displacementBytes: 0 },
-  // mod 00, rm 110
-  [0b0000_0110]: { kind: 'eac', calculationKind: 'DIRECT ADDRESS', displacementBytes: 2 },
-  // mod 00, rm 111
-  [0b0000_0111]: { kind: 'eac', calculationKind: 'bx', displacementBytes: 0 },
-  // mod 01, rm 000
-  [0b0100_0000]: { kind: 'eac', calculationKind: 'bx + si', displacementBytes: 1 },
-  // mod 01, rm 001
-  [0b0100_0001]: { kind: 'eac', calculationKind: 'bx + di', displacementBytes: 1 },
-  // mod 01, rm 010
-  [0b0100_0010]: { kind: 'eac', calculationKind: 'bp + si', displacementBytes: 1 },
-  // mod 01, rm 011
-  [0b0100_0011]: { kind: 'eac', calculationKind: 'bp + di', displacementBytes: 1 },
-  // mod 01, rm 100
-  [0b0100_0100]: { kind: 'eac', calculationKind: 'si', displacementBytes: 1 },
-  // mod 01, rm 101
-  [0b0100_0101]: { kind: 'eac', calculationKind: 'di', displacementBytes: 1 },
-  // mod 01, rm 110
-  [0b0100_0110]: { kind: 'eac', calculationKind: 'bp', displacementBytes: 1 },
-  // mod 01, rm 111
-  [0b0100_0111]: { kind: 'eac', calculationKind: 'bx', displacementBytes: 1 },
-  // mod 10, rm 000
-  [0b1000_0000]: { kind: 'eac', calculationKind: 'bx + si', displacementBytes: 2 },
-  // mod 10, rm 001
-  [0b1000_0001]: { kind: 'eac', calculationKind: 'bx + di', displacementBytes: 2 },
-  // mod 10, rm 010
-  [0b1000_0010]: { kind: 'eac', calculationKind: 'bp + si', displacementBytes: 2 },
-  // mod 10, rm 011
-  [0b1000_0011]: { kind: 'eac', calculationKind: 'bp + di', displacementBytes: 2 },
-  // mod 10, rm 100
-  [0b1000_0100]: { kind: 'eac', calculationKind: 'si', displacementBytes: 2 },
-  // mod 10, rm 101
-  [0b1000_0101]: { kind: 'eac', calculationKind: 'di', displacementBytes: 2 },
-  // mod 10, rm 110
-  [0b1000_0110]: { kind: 'eac', calculationKind: 'bp', displacementBytes: 2 },
-  // mod 10, rm 111
-  [0b1000_0111]: { kind: 'eac', calculationKind: 'bx', displacementBytes: 2 },
-};
 
 // 70 - 7f in table 4-13
 const shortLabelJumpInstructionTable: ReadonlyArray<ShortLabelJumpInstruction['kind']> = [
@@ -1647,7 +1491,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     case 0b0100_0101:
     case 0b0100_0110:
     case 0b0100_0111: {
-      const register = wordRegisterTable[firstByte & 0b0000_0111];
+      const register = wordRegisterDecodingTable[firstByte & 0b0000_0111];
 
       instruction = {
         kind: 'incRegister',
@@ -1668,7 +1512,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     case 0b0100_1101:
     case 0b0100_1110:
     case 0b0100_1111: {
-      const register = wordRegisterTable[firstByte & 0b0000_0111];
+      const register = wordRegisterDecodingTable[firstByte & 0b0000_0111];
 
       instruction = {
         kind: 'decRegister',
@@ -1689,7 +1533,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     case 0b0101_0101:
     case 0b0101_0110:
     case 0b0101_0111: {
-      const register = wordRegisterTable[firstByte & 0b0000_0111];
+      const register = wordRegisterDecodingTable[firstByte & 0b0000_0111];
 
       instruction = {
         kind: 'pushRegister',
@@ -1710,7 +1554,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     case 0b0101_1101:
     case 0b0101_1110:
     case 0b0101_1111: {
-      const register = wordRegisterTable[firstByte & 0b0000_0111];
+      const register = wordRegisterDecodingTable[firstByte & 0b0000_0111];
 
       instruction = {
         kind: 'popRegister',
@@ -1996,7 +1840,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     case 0b1001_0101:
     case 0b1001_0110:
     case 0b1001_0111: {
-      const source = wordRegisterTable[firstByte & 0b0000_0111];
+      const source = wordRegisterDecodingTable[firstByte & 0b0000_0111];
 
       instruction = {
         kind: 'xchgRegisterWithAccumulator',
@@ -2227,7 +2071,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     case 0b1011_1110:
     case 0b1011_1111: {
       const wBit = (firstByte & 0b0000_1000) === 0b0000_1000 ? 1 : 0;
-      const dest = regTable[((firstByte & 0b0000_0111) << 1) | wBit];
+      const dest = registerDecodingTable[((firstByte & 0b0000_0111) << 1) | wBit];
 
       const data = decodeIntLiteralData(context, wBit);
 
@@ -2286,7 +2130,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
         throw Error("les instruction got register source. Don't think this is allowed.");
       }
 
-      const dest = wordRegisterTable[regBits >> 3];
+      const dest = wordRegisterDecodingTable[regBits >> 3];
 
       const source = decodeEffectiveAddressCalculation(context, sourceEacCategory, null);
 
@@ -2939,7 +2783,7 @@ function decodeModRegRm(context: DecodingContext, wBit: number): [Register, Regi
   // reg bits are index 2, 3, 4. Shift them over 2 and & them with the wBit (last) to get a number in the range 0..16,
   // which is effectively table 4-9
   const regTableLookup = (regBits >> 2) | wBit;
-  const reg = regTable[regTableLookup];
+  const reg = registerDecodingTable[regTableLookup];
 
   return [reg, registerOrEacCategory];
 }
@@ -2958,12 +2802,12 @@ function decodeMiddleThreeBitsAndModRm(
 
   if (modRmIsRegister) {
     // If mod is register, we just use different bits to look up into the same reg table (4-9, or the first part of 4-10)
-    const rmReg = regTable[((byte & 0b0000_0111) << 1) | wBit];
+    const rmReg = registerDecodingTable[((byte & 0b0000_0111) << 1) | wBit];
 
     return [middleThreeBits, rmReg];
   } else {
     // If mod is memory mode (i.e. no register-to-register), use the relevant bits (mod and rm) on the effective address table (4-10)
-    const rmEac = effectiveAddressTable[byte & 0b1100_0111];
+    const rmEac = effectiveAddressDecodingTable[byte & 0b1100_0111];
 
     return [middleThreeBits, rmEac];
   }

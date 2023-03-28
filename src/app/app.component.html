@@ -8,8 +8,19 @@
   <div>
     <button (click)="decodeAndPrintWithBytes()">Decode and Print With Bytes</button>
   </div>
+
+  <div>
+    <button (click)="incompleteDecodeAndAnnotate()">Incomplete Decode and Annotate</button>
+  </div>
 </ng-container>
 
 <pre>{{ instructionString }}</pre>
+
+<ng-container *ngIf="annotatedInstructions">
+  <ng-container *ngFor="let annotatedInstruction of annotatedInstructions">
+    <pre>{{ annotatedInstruction.instruction.kind }}</pre>
+    <pre><span *ngFor="let bits of annotatedInstruction.bits">{{ bits.category }}: {{ bits.bitsString }}  </span></pre>
+  </ng-container>
+</ng-container>
 
 <button *ngIf="instructionString" type="button" (click)="download()">Download</button>
