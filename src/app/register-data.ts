@@ -48,6 +48,10 @@ export type WordRegister =
   | typeof siReg
   | typeof diReg;
 
+export type AccumulatorRegister = typeof alReg | typeof axReg;
+
+export type SegmentRegister = 'es' | 'cs' | 'ss' | 'ds';
+
 // table 4-9
 export const registerDecodingTable: ReadonlyArray<Register> = [
   // reg 000 w 0
@@ -103,10 +107,20 @@ export const wordRegisterDecodingTable: ReadonlyArray<WordRegister> = [
   diReg,
 ];
 
+export const segmentRegisterDecodingTable: ReadonlyArray<SegmentRegister> = [
+  // 00
+  'es',
+  // 01
+  'cs',
+  // 10
+  'ss',
+  // 11
+  'ds',
+];
+
 export interface RegisterEncodingData {
   readonly word: boolean;
   readonly regBits: number;
-  readonly regBitsString: string;
 }
 
 const _regEncodingTable: Record<string, RegisterEncodingData> = Object.fromEntries(
@@ -115,12 +129,9 @@ const _regEncodingTable: Record<string, RegisterEncodingData> = Object.fromEntri
 
     const regBits = (i & 0b1110) >> 1;
 
-    const regBitsString = regBits.toString(2).padStart(3, '0');
-
     const data: RegisterEncodingData = {
       word,
       regBits,
-      regBitsString,
     };
 
     return [reg.register, data];
@@ -129,4 +140,12 @@ const _regEncodingTable: Record<string, RegisterEncodingData> = Object.fromEntri
 
 export const registerEncodingTable = _regEncodingTable as Readonly<
   Record<RegisterName, RegisterEncodingData>
+>;
+
+const _segRegEncodingTable: Record<string, number> = Object.fromEntries(
+  segmentRegisterDecodingTable.map((reg, i) => [reg, i]),
+);
+
+export const segmentRegisterEncodingTable = _segRegEncodingTable as Readonly<
+  Record<SegmentRegister, number>
 >;

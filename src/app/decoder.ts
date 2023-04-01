@@ -6,12 +6,15 @@ import {
   effectiveAddressDecodingTable,
 } from './effective-address-data';
 import {
+  AccumulatorRegister,
   alReg,
   axReg,
   clReg,
   dxReg,
   Register,
   registerDecodingTable,
+  SegmentRegister,
+  segmentRegisterDecodingTable,
   WordRegister,
   wordRegisterDecodingTable,
 } from './register-data';
@@ -782,10 +785,6 @@ export type DecodedInstruction =
   | NotUsedInstruction
   | UnknownInstruction;
 
-type AccumulatorRegister = typeof alReg | typeof axReg;
-
-type SegmentRegister = 'es' | 'cs' | 'ss' | 'ds';
-
 export type RegisterOrEacCategory = Register | EffectiveAddressCalculationCategory;
 
 export interface EffectiveAddressCalculation {
@@ -853,17 +852,6 @@ const standardArithmeticLogicImmediateToRegisterMemoryInstructionTable: Readonly
   'xorImmediateToRegisterMemory',
   // 111
   'cmpImmediateToRegisterMemory',
-];
-
-const segmentRegisterTable: ReadonlyArray<SegmentRegister> = [
-  // 00
-  'es',
-  // 01
-  'cs',
-  // 10
-  'ss',
-  // 11
-  'ds',
 ];
 
 const standardLogicWithOneOrClInstructionTable: ReadonlyArray<
@@ -1614,7 +1602,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: shortLabelJumpInstructionTable[firstByte & 0b0000_1111],
-        op1: getAsTwosComplement(context.instructionBytes[context.index], 128),
+        op1: getAsTwosComplement(context.instructionBytes[context.index], 127),
       };
 
       break;
@@ -1653,7 +1641,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
       let data = decodeIntLiteralData(context, wBitForDataDecode);
 
       if (sBit) {
-        data = getAsTwosComplement(data, 128);
+        data = getAsTwosComplement(data, 127);
       }
 
       instruction = {
@@ -1747,7 +1735,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
         );
       }
 
-      const source = segmentRegisterTable[srBits >> 3];
+      const source = segmentRegisterDecodingTable[srBits >> 3];
 
       const dest = decodeRegisterOrEffectiveAddressCalculation(context, destRm, null);
 
@@ -1793,7 +1781,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
         );
       }
 
-      const dest = segmentRegisterTable[srBits >> 3];
+      const dest = segmentRegisterDecodingTable[srBits >> 3];
 
       const source = decodeRegisterOrEffectiveAddressCalculation(context, sourceRm, null);
 
@@ -2372,7 +2360,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: loopOrJumpCxInstructionTable[firstByte & 0b0000_0011],
-        op1: getAsTwosComplement(context.instructionBytes[context.index], 128),
+        op1: getAsTwosComplement(context.instructionBytes[context.index], 127),
       };
 
       break;
@@ -2843,12 +2831,12 @@ function decodeEffectiveAddressCalculation(
   if (category.displacementBytes === 0) {
     displacement = null;
   } else if (category.displacementBytes === 1) {
-    displacement = getAsTwosComplement(context.instructionBytes[context.index + 1], 128);
+    displacement = getAsTwosComplement(context.instructionBytes[context.index + 1], 127);
   } else {
     displacement = getAsTwosComplement(
       context.instructionBytes[context.index + 1] +
         (context.instructionBytes[context.index + 2] << 8),
-      32768,
+      32767,
     );
   }
 
@@ -2870,8 +2858,8 @@ function decodeEffectiveAddressCalculation(
   };
 }
 
-function getAsTwosComplement(val: number, max: 128 | 32768): number {
-  if (val < max) {
+function getAsTwosComplement(val: number, max: 127 | 32767): number {
+  if (val <= max) {
     return val;
   } else {
     return -2 * max + val;

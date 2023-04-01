@@ -69,9 +69,8 @@ export const effectiveAddressDecodingTable: Readonly<
 };
 
 export interface EffectiveAddressEncodingData {
-  readonly modRmBits: number;
-  readonly modBitsString: string;
-  readonly rmBitsString: string;
+  readonly modBits: number;
+  readonly rmBits: number;
 }
 
 const _effectiveAddressEncodingTable: Partial<
@@ -85,9 +84,8 @@ for (const [key, eacCategory] of Object.entries(effectiveAddressDecodingTable)) 
   const modRmBits = parseInt(key, 10);
 
   const data: EffectiveAddressEncodingData = {
-    modRmBits,
-    modBitsString: ((modRmBits & 0b1100_0000) >> 6).toString(2).padStart(2, '0'),
-    rmBitsString: (modRmBits & 0b0111).toString(2).padStart(3, '0'),
+    modBits: (modRmBits & 0b1100_0000) >> 6,
+    rmBits: modRmBits & 0b0111,
   };
 
   const existingEntry = _effectiveAddressEncodingTable[eacCategory.calculationKind];
