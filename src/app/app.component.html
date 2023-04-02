@@ -19,7 +19,7 @@
 <ng-container *ngIf="annotatedInstructions">
   <ng-container *ngFor="let annotatedInstruction of annotatedInstructions">
     <pre>{{ annotatedInstruction.instruction.kind }}</pre>
-    <pre><span *ngFor="let bits of annotatedInstruction.bits">{{ bits.category }}: {{ bits.bitsString }}  </span></pre>
+    <pre><span *ngFor="let bits of annotatedInstruction.bits">{{ bits.category }}: {{ bits.value.toString(2).padStart(bits.length, '0') }}  </span></pre>
   </ng-container>
 </ng-container>
 

@@ -5,7 +5,7 @@ import {
   decodeInstructions,
   decodeInstructionsAndByteIndices,
 } from './decoder';
-import { AnnotatedBits, encodeAsAnnotatedBits } from './encoder';
+import { AnnotatedBits, encodeBitAnnotations } from './encoder';
 import { printDecodedInstructions } from './printer';
 
 @Component({
@@ -94,7 +94,7 @@ export class AppComponent {
     console.log(decodedInstructions);
     this.annotatedInstructions = decodedInstructions.map((instruction) => ({
       instruction,
-      bits: encodeAsAnnotatedBits(instruction),
+      bits: encodeBitAnnotations(instruction),
     }));
   }
 

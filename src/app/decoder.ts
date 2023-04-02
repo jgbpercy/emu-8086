@@ -7,15 +7,15 @@ import {
 } from './effective-address-data';
 import {
   AccumulatorRegister,
+  Register,
+  SegmentRegister,
+  WordRegister,
   alReg,
   axReg,
   clReg,
   dxReg,
-  Register,
   registerDecodingTable,
-  SegmentRegister,
   segmentRegisterDecodingTable,
-  WordRegister,
   wordRegisterDecodingTable,
 } from './register-data';
 
@@ -288,7 +288,7 @@ export type CmpImmediateToRegisterMemoryInstruction = _TwoOperandInstruction<
 export type TestRegisterMemoryAndRegisterInstruction = _TwoOperandInstruction<
   'testRegisterMemoryAndRegister',
   RegisterOrEac,
-  RegisterOrEac
+  Register
 >;
 
 export type XchgRegisterMemoryWithRegisterInstruction = _TwoOperandInstruction<
@@ -354,12 +354,16 @@ export type SahfStoreAhIntoFlagsInstruction = _NoOperandInstruction<'sahfStoreAh
 
 export type LahfLoadAhWithFlagsInstruction = _NoOperandInstruction<'lahfLoadAhWithFlags'>;
 
-export type MovMemoryToFromAccumulatorInstruction = _TwoOperandInstruction<
-  'movMemoryToFromAccumulator',
-  | AccumulatorRegister
-  | { kind: 'mem'; calculationKind: 'DIRECT ADDRESS'; displacement: number; length: null },
-  | AccumulatorRegister
-  | { kind: 'mem'; calculationKind: 'DIRECT ADDRESS'; displacement: number; length: null }
+export type MovMemoryToAccumulatorInstruction = _TwoOperandInstruction<
+  'movMemoryToAccumulator',
+  AccumulatorRegister,
+  { kind: 'mem'; calculationKind: 'DIRECT ADDRESS'; displacement: number; length: null }
+>;
+
+export type MovAccumulatorToMemoryInstruction = _TwoOperandInstruction<
+  'movAccumulatorToMemory',
+  { kind: 'mem'; calculationKind: 'DIRECT ADDRESS'; displacement: number; length: null },
+  AccumulatorRegister
 >;
 
 export type MovsMoveByteWordInstruction = _NoOperandInstruction<'movsMoveByteWord'> &
@@ -738,7 +742,8 @@ export type DecodedInstruction =
   | PopfPopFlagsInstruction
   | SahfStoreAhIntoFlagsInstruction
   | LahfLoadAhWithFlagsInstruction
-  | MovMemoryToFromAccumulatorInstruction
+  | MovMemoryToAccumulatorInstruction
+  | MovAccumulatorToMemoryInstruction
   | MovsMoveByteWordInstruction
   | CmpsCompareByteWordInstruction
   | TestImmediateWithAccumulatorInstruction
@@ -1661,6 +1666,10 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     case 0b1000_0101: {
       const [dest, source] = decodeDestSourceForModRegRmInstruction(context);
 
+      if (source.kind === 'mem') {
+        throw Error('Got memory source for test register/memory and register instruction');
+      }
+
       instruction = {
         kind: 'testRegisterMemoryAndRegister',
         op1: dest,
@@ -1676,6 +1685,10 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     case 0b1000_0110:
     case 0b1000_0111: {
       const [dest, source] = decodeDestSourceForModRegRmInstruction(context);
+
+      if (dest.kind === 'mem') {
+        throw Error('Got memory dest for xchg register/memory with register instruction');
+      }
 
       // Don't use consumeLockPrefix, as we can lock even if source is mem (I think)
       const lock = context.lock;
@@ -1945,11 +1958,19 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
         length: null,
       } satisfies EffectiveAddressCalculation;
 
-      instruction = {
-        kind: 'movMemoryToFromAccumulator',
-        op1: isAccToMem ? memoryAddressCalculation : reg,
-        op2: isAccToMem ? reg : memoryAddressCalculation,
-      };
+      if (isAccToMem) {
+        instruction = {
+          kind: 'movAccumulatorToMemory',
+          op1: memoryAddressCalculation,
+          op2: reg,
+        };
+      } else {
+        instruction = {
+          kind: 'movMemoryToAccumulator',
+          op1: reg,
+          op2: memoryAddressCalculation,
+        };
+      }
 
       break;
     }
