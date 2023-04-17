@@ -487,8 +487,8 @@ export type XlatTranslateByteToAlInstruction = _NoOperandInstruction<'xlatTransl
 
 export type EscEscapeToExternalDeviceInstruction = _TwoOperandInstruction<
   'escEscapeToExternalDevice',
-  RegisterOrEac,
-  number
+  number,
+  RegisterOrEac
 >;
 
 export type LoopneLoopWhileNotEqualInstruction = _OneOperandInstruction<
@@ -2364,8 +2364,8 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: 'escEscapeToExternalDevice',
-        op1: source,
-        op2: fullOpCode,
+        op1: fullOpCode,
+        op2: source,
       };
 
       break;
