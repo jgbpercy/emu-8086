@@ -280,6 +280,13 @@ function mapValuesToUpper<T extends Readonly<Record<string, string>>>(original: 
   return copy;
 }
 
+export function printDecodedInstruction(
+  instruction: DecodedInstruction,
+  settings?: PrinterSettings,
+): string {
+  return printInstruction(instruction, { ...defaultSettings, ...settings });
+}
+
 function printInstruction(
   instruction: DecodedInstruction,
   settings: Required<PrinterSettings>,

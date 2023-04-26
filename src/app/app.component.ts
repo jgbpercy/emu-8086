@@ -1,12 +1,8 @@
 import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
-import {
-  DecodedInstruction,
-  decodeInstructions,
-  decodeInstructionsAndByteIndices,
-} from './decoder';
-import { AnnotatedBits, encodeBitAnnotations } from './encoder';
-import { printDecodedInstructions } from './printer';
+import { DecodedInstruction, decodeInstructionsAndByteIndices } from './decoder';
+import { AnnotatedBits, encodeBitAnnotations, encodeBytesFromAnnotatedBits } from './encoder';
+import { printDecodedInstruction, printDecodedInstructions } from './printer';
 
 @Component({
   selector: 'app-root',
@@ -20,7 +16,13 @@ export class AppComponent {
 
   instructionBytes?: Uint8Array;
 
-  annotatedInstructions?: { instruction: DecodedInstruction; bits: ReadonlyArray<AnnotatedBits> }[];
+  annotatedInstructions?: ReadonlyArray<{
+    asm: string;
+    instruction: DecodedInstruction;
+    annotatedBits: ReadonlyArray<AnnotatedBits>;
+    originalBytes: Uint8Array;
+    normalizedBytes: Uint8Array;
+  }>;
 
   gotFile(evt: Event): void {
     if (evt.target instanceof HTMLInputElement) {
@@ -89,13 +91,36 @@ export class AppComponent {
       throw Error('No bytes!');
     }
 
-    const decodedInstructions = decodeInstructions(this.instructionBytes);
+    const decodedInstructionsWithByteIndices = decodeInstructionsAndByteIndices(
+      this.instructionBytes,
+    );
 
-    console.log(decodedInstructions);
-    this.annotatedInstructions = decodedInstructions.map((instruction) => ({
-      instruction,
-      bits: encodeBitAnnotations(instruction),
-    }));
+    console.log(decodedInstructionsWithByteIndices);
+    // TODO temp duplicating stuff with printer here and in the template obv
+    this.annotatedInstructions = decodedInstructionsWithByteIndices.map(
+      (instructionWithByteIndex, i) => {
+        const [byteIndex, instruction] = instructionWithByteIndex;
+
+        const annotatedBits = encodeBitAnnotations(instruction);
+
+        if (this.instructionBytes === undefined) {
+          throw Error('Temp TODO should not get here');
+        }
+
+        const subsequentByteIndex =
+          i + 1 === decodedInstructionsWithByteIndices.length
+            ? this.instructionBytes.length
+            : decodedInstructionsWithByteIndices[i + 1][0];
+
+        return {
+          asm: printDecodedInstruction(instruction),
+          instruction: instruction,
+          annotatedBits,
+          originalBytes: this.instructionBytes.slice(byteIndex, subsequentByteIndex),
+          normalizedBytes: encodeBytesFromAnnotatedBits(annotatedBits),
+        };
+      },
+    );
   }
 
   download(): void {

@@ -10,16 +10,21 @@
   </div>
 
   <div>
-    <button (click)="incompleteDecodeAndAnnotate()">Incomplete Decode and Annotate</button>
+    <button (click)="incompleteDecodeAndAnnotate()">Decode and Annotate</button>
   </div>
 </ng-container>
 
 <pre>{{ instructionString }}</pre>
 
 <ng-container *ngIf="annotatedInstructions">
-  <ng-container *ngFor="let annotatedInstruction of annotatedInstructions">
+  <ng-container *ngFor="let annotatedInstruction of annotatedInstructions; let i = index">
+    <pre>{{ i + 1 }}</pre>
+    <pre>{{ annotatedInstruction.asm }}</pre>
     <pre>{{ annotatedInstruction.instruction.kind }}</pre>
-    <pre><span *ngFor="let bits of annotatedInstruction.bits">{{ bits.category }}: {{ bits.value.toString(2).padStart(bits.length, '0') }}  </span></pre>
+    <pre><span *ngFor="let bits of annotatedInstruction.annotatedBits">{{ bits.category }}: {{ bits.value.toString(2).padStart(bits.length, '0') }}  </span></pre>
+    <pre>orig: <span *ngFor="let byte of annotatedInstruction.originalBytes">{{ byte.toString(2).padStart(8, '0') }}   </span></pre>
+    <pre>norm: <span *ngFor="let byte of annotatedInstruction.normalizedBytes">{{ byte.toString(2).padStart(8, '0') }}   </span></pre>
+    <hr />
   </ng-container>
 </ng-container>
 
