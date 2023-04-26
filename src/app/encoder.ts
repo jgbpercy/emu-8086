@@ -50,6 +50,53 @@ const mod11Annotation: AnnotatedBits = {
   length: 2,
 };
 
+// 6 bytes + lock OR rep (can't see anything that can have both) + segment override = 8
+const maxInstructionLengthInBytes = 8;
+
+export function encodeBytesFromAnnotatedBits(
+  annotatedBits: ReadonlyArray<AnnotatedBits>,
+): Uint8Array {
+  const resultBytes = new Uint8Array(maxInstructionLengthInBytes);
+
+  let byteIndex = 0;
+  let positionInByte = 0;
+  let currentByteValue = 0;
+
+  for (const annotation of annotatedBits) {
+    if (byteIndex >= maxInstructionLengthInBytes) {
+      throw Error(
+        `Something went wrong - got an instruction longer than ${maxInstructionLengthInBytes} bytes`,
+      );
+    }
+
+    const shift = 8 - annotation.length - positionInByte;
+
+    if (shift < 0) {
+      throw Error(
+        'Something went wrong - next annotated bits take up more of the current byte than is left',
+      );
+    }
+
+    const valueInByte = annotation.value << shift;
+
+    currentByteValue += valueInByte;
+
+    positionInByte += annotation.length;
+
+    if (positionInByte > 8) {
+      throw Error('Something went wrong - went past the end of the byte');
+    } else if (positionInByte === 8) {
+      resultBytes[byteIndex] = currentByteValue;
+
+      byteIndex += 1;
+      positionInByte = 0;
+      currentByteValue = 0;
+    }
+  }
+
+  return resultBytes.slice(0, byteIndex);
+}
+
 export function encodeBitAnnotations(
   instruction: DecodedInstruction,
 ): ReadonlyArray<AnnotatedBits> {
@@ -1566,7 +1613,7 @@ function encodeModRmDisplacementForMemoryOperand(op: EffectiveAddressCalculation
         category: 'dispLo',
         value: 0,
         length: 8,
-      })
+      });
     } else {
       displacementBytes = 0;
     }
