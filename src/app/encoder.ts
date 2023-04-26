@@ -1281,7 +1281,7 @@ function encodeModRegRmInstructionWithVariableDest(
         value: 0,
         length: 1,
       },
-      ...encodeWbitModRegRmForMod11(instruction.op1, instruction.op2),
+      ...encodeWbitModRegRmForMod11(instruction.op2, instruction.op1),
     ];
   } else {
     const dBitAnnotation: AnnotatedBits = {
@@ -1315,27 +1315,27 @@ function encodeModRegRmInstructionWithFixedDest(
 }
 
 function encodeWbitModRegRmForMod11(
-  dest: Register,
-  source: Register,
+  regField: Register,
+  rmField: Register,
 ): ReadonlyArray<AnnotatedBits> {
-  const destRegData = registerEncodingTable[dest.register];
-  const sourceRegData = registerEncodingTable[source.register];
+  const regRegisterData = registerEncodingTable[regField.register];
+  const rmRegisterData = registerEncodingTable[rmField.register];
 
   return [
     {
       category: 'wBit',
-      value: destRegData.word ? 1 : 0,
+      value: regRegisterData.word ? 1 : 0,
       length: 1,
     },
     mod11Annotation,
     {
       category: 'reg',
-      value: destRegData.regBits,
+      value: regRegisterData.regBits,
       length: 3,
     },
     {
       category: 'rm',
-      value: sourceRegData.regBits,
+      value: rmRegisterData.regBits,
       length: 3,
     },
   ];
