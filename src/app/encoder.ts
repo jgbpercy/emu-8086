@@ -1558,7 +1558,18 @@ function encodeModRmDisplacementForMemoryOperand(op: EffectiveAddressCalculation
 
     displacement.push(...encodeLoHiDisplacement(op.displacement ?? 0));
   } else if (op.displacement === 0 || op.displacement === null) {
-    displacementBytes = 0;
+    // Exception to the rule for bp because its mod 00 (no displacement) slot
+    // is used for DIRECT ADDRESS, see table 4-10
+    if (op.calculationKind === 'bp') {
+      displacementBytes = 1;
+      displacement.push({
+        category: 'dispLo',
+        value: 0,
+        length: 8,
+      })
+    } else {
+      displacementBytes = 0;
+    }
   } else if (op.displacement >= -128 && op.displacement <= 127) {
     displacementBytes = 1;
     displacement.push({
