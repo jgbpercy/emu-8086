@@ -1,6 +1,3 @@
-// TODO: consolidate instructions into groups
-// for normal mod/reg/rm instructions, type can be more restricted along these lines:
-
 import {
   EffectiveAddressCalculationCategory,
   effectiveAddressDecodingTable,
@@ -18,16 +15,6 @@ import {
   segmentRegisterDecodingTable,
   wordRegisterDecodingTable,
 } from './register-data';
-
-// type ModRegRmInstruction = {
-//   readonly dest: RegisterOrEac;
-//   readonly source: Register;
-// } | {
-//   readonly dest: Register;
-//   readonly source: RegisterOrEac;
-// }
-
-// But is that actually helpful?
 
 // TODO consolidate thrown Errors/Not Used/Unknown into coherent error handling that outputs what went wrong
 
@@ -2915,10 +2902,11 @@ function decodeIntLiteralData(context: DecodingContext, wBit: number): number {
 
 function consumeLockPrefix(context: DecodingContext, dest: RegisterOrEac): boolean {
   // I went off this random page, which is for ia-32
+  // https://docs.oracle.com/cd/E19455-01/806-3773/instructionset-128/index.html
   // It says we can lock xchg, add, or, adc, sbb, and, sub, xor, not, neg, inc, dec
   // It also lists instructions that aren't on the 8086,
   // and seems to say we can only lock when dest is mem, except for xchg
-  // TODO actually find this in the
+  // TODO actually find this in the manual?
   if (dest.kind === 'reg' && context.lock) {
     throw Error('This instruction is not lockable');
   }

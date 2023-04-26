@@ -12,6 +12,8 @@ import {
 } from './register-data';
 
 export type AnnotatedBitsCategory =
+  | 'lockPrefix'
+  | 'repPrefix'
   | 'opCode'
   | 'mod'
   | 'reg'
@@ -39,7 +41,7 @@ export interface AnnotatedBits {
   readonly value: number;
   readonly length: number;
   readonly category: AnnotatedBitsCategory;
-  readonly linkedPartIndices?: number[];
+  readonly linkedPartIndices?: ReadonlyArray<number>;
 }
 
 const mod11Annotation: AnnotatedBits = {
@@ -49,6 +51,48 @@ const mod11Annotation: AnnotatedBits = {
 };
 
 export function encodeBitAnnotations(
+  instruction: DecodedInstruction,
+): ReadonlyArray<AnnotatedBits> {
+  // TODO This is maybe a bit sloppy but it's simple and it'll do for now
+  let annotatedBits = encodeBitAnnotationsWithoutLockOrRep(instruction);
+
+  if ('lock' in instruction && instruction.lock) {
+    annotatedBits = [
+      {
+        category: 'lockPrefix',
+        value: 0b1111_0000,
+        length: 8,
+      },
+      ...annotatedBits.map((annotation) => incrementLinkedPartIndices(annotation)),
+    ];
+  }
+
+  if ('rep' in instruction && instruction.rep !== null) {
+    annotatedBits = [
+      {
+        category: 'repPrefix',
+        value: instruction.rep === 'repne ' ? 0b1111_0010 : 0b1111_0011,
+        length: 8,
+      },
+      ...annotatedBits.map((annotation) => incrementLinkedPartIndices(annotation)),
+    ];
+  }
+
+  return annotatedBits;
+}
+
+function incrementLinkedPartIndices(annotation: AnnotatedBits): AnnotatedBits {
+  if (annotation.linkedPartIndices === undefined) {
+    return annotation;
+  } else {
+    return {
+      ...annotation,
+      linkedPartIndices: annotation.linkedPartIndices.map((index) => index + 1),
+    };
+  }
+}
+
+export function encodeBitAnnotationsWithoutLockOrRep(
   instruction: DecodedInstruction,
 ): ReadonlyArray<AnnotatedBits> {
   switch (instruction.kind) {
