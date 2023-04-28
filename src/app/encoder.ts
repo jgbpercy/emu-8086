@@ -356,7 +356,7 @@ export function encodeBitAnnotationsWithoutLockOrRep(
       return [
         {
           category: 'opCode',
-          value: 0b1001_1,
+          value: 0b1001_0,
           length: 5,
         },
         {
