@@ -1430,18 +1430,18 @@ function encodeStandardArithmeticLogicImmediateToRegisterMemoryInstruction(
     linkedPartIndices: [0],
   };
 
-  const sBitAnnotation: AnnotatedBits = {
-    category: 'sBit',
-    value: instruction.op2 >= -128 && instruction.op2 < 0 ? 1 : 0,
-    length: 1,
-  };
-
   if (instruction.op1.kind === 'reg') {
     const regData = registerEncodingTable[instruction.op1.register];
 
+    const sBit = regData.word && instruction.op2 >= -128 && instruction.op2 <= 127 ? 1 : 0;
+
     return [
       opCodePart1Annotation,
-      sBitAnnotation,
+      {
+        category: 'sBit',
+        value: sBit,
+        length: 1,
+      },
       {
         category: 'wBit',
         value: regData.word ? 1 : 0,
@@ -1454,7 +1454,7 @@ function encodeStandardArithmeticLogicImmediateToRegisterMemoryInstruction(
         value: regData.regBits,
         length: 3,
       },
-      ...encodeData(regData.word, instruction.op2),
+      ...encodeData(regData.word && !sBit, instruction.op2),
     ];
   } else {
     const word = instruction.op1.length === 2;
@@ -1467,6 +1467,16 @@ function encodeStandardArithmeticLogicImmediateToRegisterMemoryInstruction(
 
     const { modAnnotation, rmAnnotation, displacementAnnotations } =
       encodeModRmDisplacementForMemoryOperand(instruction.op1);
+
+    const sBit = word && instruction.op2 >= -128 && instruction.op2 <= 127 ? 1 : 0;
+
+    const sBitAnnotation: AnnotatedBits = {
+      category: 'sBit',
+      value: sBit,
+      length: 1,
+    };
+
+    const dataAnnotations = encodeData(word && !sBit, instruction.op2);
 
     if (instruction.op1.segmentOverridePrefix) {
       return [
@@ -1484,7 +1494,7 @@ function encodeStandardArithmeticLogicImmediateToRegisterMemoryInstruction(
         },
         rmAnnotation,
         ...displacementAnnotations,
-        ...encodeData(word, instruction.op2),
+        ...dataAnnotations,
       ];
     } else {
       return [
@@ -1495,7 +1505,7 @@ function encodeStandardArithmeticLogicImmediateToRegisterMemoryInstruction(
         opCodePart2Annotation,
         rmAnnotation,
         ...displacementAnnotations,
-        ...encodeData(word, instruction.op2),
+        ...dataAnnotations,
       ];
     }
   }
