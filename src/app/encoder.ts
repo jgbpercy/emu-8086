@@ -333,18 +333,28 @@ export function encodeBitAnnotationsWithoutLockOrRep(
     case 'movSegmentRegisterToRegisterMemory':
       return encodeSegmentRegisterMovInstruction(0b1000_1100, instruction.op1, instruction.op2);
 
-    case 'leaLoadEaToRegister':
-      return [
-        {
-          category: 'opCode',
-          value: 0b1000_1101,
-          length: 8,
-        },
-        ...encodeModRegRmDisplacementForMemoryMod(
-          registerEncodingTable[instruction.op1.register],
-          instruction.op2,
-        ),
-      ];
+    case 'leaLoadEaToRegister': {
+      const opCodeAnnotation: AnnotatedBits = {
+        category: 'opCode',
+        value: 0b1000_1101,
+        length: 8,
+      };
+
+      const modRegRmDisplacementAnnotations = encodeModRegRmDisplacementForMemoryMod(
+        registerEncodingTable[instruction.op1.register],
+        instruction.op2,
+      );
+
+      if (instruction.op2.segmentOverridePrefix) {
+        return [
+          ...encodeSegmentOverridePrefix(instruction.op2.segmentOverridePrefix),
+          opCodeAnnotation,
+          ...modRegRmDisplacementAnnotations,
+        ];
+      } else {
+        return [opCodeAnnotation, ...modRegRmDisplacementAnnotations];
+      }
+    }
 
     case 'movRegisterMemoryToSegmentRegister':
       return encodeSegmentRegisterMovInstruction(0b1000_1110, instruction.op2, instruction.op1);
@@ -507,31 +517,51 @@ export function encodeBitAnnotationsWithoutLockOrRep(
     case 'retWithinSegment':
       return [{ category: 'opCode', value: 0b1100_0011, length: 8 }];
 
-    case 'lesLoadPointerToEs':
-      return [
-        {
-          category: 'opCode',
-          value: 0b1100_0100,
-          length: 8,
-        },
-        ...encodeModRegRmDisplacementForMemoryMod(
-          registerEncodingTable[instruction.op1.register],
-          instruction.op2,
-        ),
-      ];
+    case 'lesLoadPointerToEs': {
+      const opCodeAnnotation: AnnotatedBits = {
+        category: 'opCode',
+        value: 0b1100_0100,
+        length: 8,
+      };
 
-    case 'ldsLoadPointerToDs':
-      return [
-        {
-          category: 'opCode',
-          value: 0b1100_0101,
-          length: 8,
-        },
-        ...encodeModRegRmDisplacementForMemoryMod(
-          registerEncodingTable[instruction.op1.register],
-          instruction.op2,
-        ),
-      ];
+      const modRegRmDisplacementAnnotations = encodeModRegRmDisplacementForMemoryMod(
+        registerEncodingTable[instruction.op1.register],
+        instruction.op2,
+      );
+
+      if (instruction.op2.segmentOverridePrefix) {
+        return [
+          ...encodeSegmentOverridePrefix(instruction.op2.segmentOverridePrefix),
+          opCodeAnnotation,
+          ...modRegRmDisplacementAnnotations,
+        ];
+      } else {
+        return [opCodeAnnotation, ...modRegRmDisplacementAnnotations];
+      }
+    }
+
+    case 'ldsLoadPointerToDs': {
+      const opCodeAnnotation: AnnotatedBits = {
+        category: 'opCode',
+        value: 0b1100_0101,
+        length: 8,
+      };
+
+      const modRegRmDisplacementAnnotations = encodeModRegRmDisplacementForMemoryMod(
+        registerEncodingTable[instruction.op1.register],
+        instruction.op2,
+      );
+
+      if (instruction.op2.segmentOverridePrefix) {
+        return [
+          ...encodeSegmentOverridePrefix(instruction.op2.segmentOverridePrefix),
+          opCodeAnnotation,
+          ...modRegRmDisplacementAnnotations,
+        ];
+      } else {
+        return [opCodeAnnotation, ...modRegRmDisplacementAnnotations];
+      }
+    }
 
     case 'movImmediateToRegisterMemory': {
       const opCodePart1Annotation: AnnotatedBits = {
@@ -1290,7 +1320,22 @@ function encodeModRegRmInstructionWithVariableDest(
       length: 1,
     };
 
-    return [opCodeAnnotation, dBitAnnotation, ...encodeWbitModRegRmForMemoryMod(instruction)];
+    const { registerOperand, memoryOperand } = getRegisterMemoryOperands(instruction);
+
+    if (memoryOperand.segmentOverridePrefix) {
+      return [
+        ...encodeSegmentOverridePrefix(memoryOperand.segmentOverridePrefix),
+        opCodeAnnotation,
+        dBitAnnotation,
+        ...encodeWbitModRegRmForMemoryMod(registerOperand, memoryOperand),
+      ];
+    } else {
+      return [
+        opCodeAnnotation,
+        dBitAnnotation,
+        ...encodeWbitModRegRmForMemoryMod(registerOperand, memoryOperand),
+      ];
+    }
   }
 }
 
@@ -1319,7 +1364,17 @@ function encodeModRegRmInstructionWithFixedDest(
         : encodeWbitModRegRmForMod11(instruction.op1, instruction.op2)),
     ];
   } else {
-    return [opCodeAnnotation, ...encodeWbitModRegRmForMemoryMod(instruction)];
+    const { registerOperand, memoryOperand } = getRegisterMemoryOperands(instruction);
+
+    if (memoryOperand.segmentOverridePrefix) {
+      return [
+        ...encodeSegmentOverridePrefix(memoryOperand.segmentOverridePrefix),
+        opCodeAnnotation,
+        ...encodeWbitModRegRmForMemoryMod(registerOperand, memoryOperand),
+      ];
+    } else {
+      return [opCodeAnnotation, ...encodeWbitModRegRmForMemoryMod(registerOperand, memoryOperand)];
+    }
   }
 }
 
@@ -1350,18 +1405,10 @@ function encodeWbitModRegRmForMod11(
   ];
 }
 
-function encodeWbitModRegRmForMemoryMod(instruction: {
-  op1: RegisterOrEac;
-  op2: RegisterOrEac;
-}): ReadonlyArray<AnnotatedBits> {
-  const memoryOperand = instruction.op1.kind === 'reg' ? instruction.op2 : instruction.op1;
-  const registerOperand = instruction.op1.kind === 'reg' ? instruction.op1 : instruction.op2;
-  if (memoryOperand.kind === 'reg' || registerOperand.kind === 'mem') {
-    throw Error(
-      'Internal error: Both operands were reg or mem when they were expected to be different kinds.',
-    );
-  }
-
+function encodeWbitModRegRmForMemoryMod(
+  registerOperand: Register,
+  memoryOperand: EffectiveAddressCalculation,
+): ReadonlyArray<AnnotatedBits> {
   const regData = registerEncodingTable[registerOperand.register];
 
   const wBitAnnotation: AnnotatedBits = {
@@ -1373,6 +1420,21 @@ function encodeWbitModRegRmForMemoryMod(instruction: {
   return [wBitAnnotation, ...encodeModRegRmDisplacementForMemoryMod(regData, memoryOperand)];
 }
 
+function getRegisterMemoryOperands(instruction: { op1: RegisterOrEac; op2: RegisterOrEac }): {
+  registerOperand: Register;
+  memoryOperand: EffectiveAddressCalculation;
+} {
+  const memoryOperand = instruction.op1.kind === 'reg' ? instruction.op2 : instruction.op1;
+  const registerOperand = instruction.op1.kind === 'reg' ? instruction.op1 : instruction.op2;
+  if (memoryOperand.kind === 'reg' || registerOperand.kind === 'mem') {
+    throw Error(
+      'Internal error: Both operands were reg or mem when they were expected to be different kinds.',
+    );
+  }
+
+  return { registerOperand, memoryOperand };
+}
+
 function encodeModRegRmDisplacementForMemoryMod(
   regData: RegisterEncodingData,
   memoryOperand: EffectiveAddressCalculation,
@@ -1380,7 +1442,7 @@ function encodeModRegRmDisplacementForMemoryMod(
   const { modAnnotation, rmAnnotation, displacementAnnotations } =
     encodeModRmDisplacementForMemoryOperand(memoryOperand);
 
-  const annotatedBits: ReadonlyArray<AnnotatedBits> = [
+  return [
     modAnnotation,
     {
       category: 'reg',
@@ -1390,12 +1452,6 @@ function encodeModRegRmDisplacementForMemoryMod(
     rmAnnotation,
     ...displacementAnnotations,
   ];
-
-  if (memoryOperand.segmentOverridePrefix === undefined) {
-    return annotatedBits;
-  }
-
-  return [...encodeSegmentOverridePrefix(memoryOperand.segmentOverridePrefix), ...annotatedBits];
 }
 
 function encodeSegmentOverridePrefix(
