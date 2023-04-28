@@ -1621,7 +1621,7 @@ function encodeModRmDisplacementForMemoryOperand(op: EffectiveAddressCalculation
     displacementBytes = 1;
     displacement.push({
       category: 'dispLo',
-      value: toTwosComplimentBits(op.displacement),
+      value: toTwosComplementBits(op.displacement),
       length: 8,
     });
   } else {
@@ -1730,7 +1730,7 @@ function encodeData(word: boolean, value: number): ReadonlyArray<AnnotatedBits> 
     return [
       {
         category: 'dataLo',
-        value: toTwosComplimentBits(value),
+        value: toTwosComplementBits(value),
         length: 8,
       },
     ];
@@ -1754,17 +1754,17 @@ function encodeInt16Literal(
   loCategory: 'dispLo' | 'dataLo' | 'segLo' | 'ipLo' | 'ipIncLo',
   hiCategory: 'dispHi' | 'dataHi' | 'segHi' | 'ipHi' | 'ipIncHi',
 ): ReadonlyArray<AnnotatedBits> {
-  const twosComplimentBits = toTwosComplimentBits(value16);
+  const twosComplementBits = toTwosComplementBits(value16);
 
   return [
     {
       category: loCategory,
-      value: twosComplimentBits & 0xff,
+      value: twosComplementBits & 0xff,
       length: 8,
     },
     {
       category: hiCategory,
-      value: (twosComplimentBits & 0xff00) >> 8,
+      value: (twosComplementBits & 0xff00) >> 8,
       length: 8,
     },
   ];
@@ -1778,7 +1778,7 @@ function toBitsString(value: number, bitLength: number): string {
   return value.toString(2).padStart(bitLength, '0');
 }
 
-function toTwosComplimentBits(val: number): number {
+function toTwosComplementBits(val: number): number {
   if (val >= 0) {
     return val;
   }
@@ -1786,6 +1786,6 @@ function toTwosComplimentBits(val: number): number {
   if (val >= -128) {
     return val + 256;
   } else {
-    return val + 32768;
+    return val + 65536;
   }
 }

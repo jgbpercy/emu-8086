@@ -2870,7 +2870,7 @@ function getAsTwosComplement(val: number, max: 127 | 32767): number {
   if (val <= max) {
     return val;
   } else {
-    return -2 * max + val;
+    return  val - 2 * (max + 1);
   }
 }
 
