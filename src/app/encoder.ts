@@ -322,10 +322,10 @@ export function encodeBitAnnotationsWithoutLockOrRep(
       return encodeStandardArithmeticLogicImmediateToRegisterMemoryInstruction(0b111, instruction);
 
     case 'testRegisterMemoryAndRegister':
-      return encodeModRegRmInstructionWithFixedDest(0b1000_010, instruction);
+      return encodeModRegRmInstructionWithFixedDest(0b1000_010, instruction, true);
 
     case 'xchgRegisterMemoryWithRegister':
-      return encodeModRegRmInstructionWithFixedDest(0b1000_011, instruction);
+      return encodeModRegRmInstructionWithFixedDest(0b1000_011, instruction, false);
 
     case 'movRegisterMemoryToFromRegister':
       return encodeModRegRmInstructionWithVariableDest(0b1000_10, instruction);
@@ -1300,6 +1300,10 @@ function encodeModRegRmInstructionWithFixedDest(
     op1: RegisterOrEac;
     op2: RegisterOrEac;
   },
+  // Hack to match nasm, which seems to put the dest in reg for test but not xchg?
+  // Or I got something wrong elsewhere
+  // Anyway I believe the order shouldn't matter for the instructions that use this
+  switchRegisterOpOrder: boolean,
 ): ReadonlyArray<AnnotatedBits> {
   const opCodeAnnotation: AnnotatedBits = {
     category: 'opCode',
@@ -1308,7 +1312,12 @@ function encodeModRegRmInstructionWithFixedDest(
   };
 
   if (instruction.op1.kind === 'reg' && instruction.op2.kind === 'reg') {
-    return [opCodeAnnotation, ...encodeWbitModRegRmForMod11(instruction.op1, instruction.op2)];
+    return [
+      opCodeAnnotation,
+      ...(switchRegisterOpOrder
+        ? encodeWbitModRegRmForMod11(instruction.op2, instruction.op1)
+        : encodeWbitModRegRmForMod11(instruction.op1, instruction.op2)),
+    ];
   } else {
     return [opCodeAnnotation, ...encodeWbitModRegRmForMemoryMod(instruction)];
   }
