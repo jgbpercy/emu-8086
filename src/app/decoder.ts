@@ -1616,15 +1616,17 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
       const instructionKind =
         standardArithmeticLogicImmediateToRegisterMemoryInstructionTable[opCodeBits >> 3];
 
-      if (
-        sBit &&
-        (instructionKind === 'orImmediateToRegisterMemory' ||
-          instructionKind === 'andImmediateToRegisterMemory' ||
-          instructionKind === 'xorImmediateToRegisterMemory')
-      ) {
-        instruction = { kind: 'UNKNOWN' };
-        break;
-      }
+      // TODO Manual claims that this (sBit set with or/and/xor) shouldn't be possible,
+      // but nasm will produce these bytes even with cpu 8086, so let this through but
+      // maybe raise a warning or something later
+      // if (
+      //   sBit &&
+      //   (instructionKind === 'orImmediateToRegisterMemory' ||
+      //     instructionKind === 'andImmediateToRegisterMemory' ||
+      //     instructionKind === 'xorImmediateToRegisterMemory')
+      // ) {
+      //   raise a warning or something?
+      // }
 
       const dest = decodeRegisterOrEffectiveAddressCalculation(context, destRm, wBit ? 2 : 1);
 
@@ -1755,7 +1757,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       if (sourceCategory.kind === 'reg') {
         throw Error(
-          "Got mov register source for lea instruction. Seems like this shouldn't be possible",
+          "Got register source for lea instruction. Seems like this shouldn't be possible",
         );
       }
 
@@ -2722,7 +2724,10 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
   context.index++;
 
-  // If we got here without consuming the segment register prefix, something went very wrong!
+  // nasm will allow you to just have a floating prefix wherever you want, basically.
+  // For now at least, we're going to be more strict and say that locks and reps have to
+  // be before an appropriate instruction, and segment overrides have to be before
+  // a memory operand.
   if (context.segmentOverridePrefix !== undefined) {
     throw Error('Unconsumed segment register prefix');
   }
@@ -2870,7 +2875,7 @@ function getAsTwosComplement(val: number, max: 127 | 32767): number {
   if (val <= max) {
     return val;
   } else {
-    return  val - 2 * (max + 1);
+    return val - 2 * (max + 1);
   }
 }
 
