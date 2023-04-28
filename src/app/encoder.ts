@@ -826,7 +826,7 @@ export function encodeBitAnnotationsWithoutLockOrRep(
       return [{ category: 'opCode', value: 0b1111_0100, length: 8 }];
 
     case 'cmcComplementCarry':
-      return [{ category: 'opCode', value: 0b1111_0100, length: 8 }];
+      return [{ category: 'opCode', value: 0b1111_0101, length: 8 }];
 
     case 'testImmediateDataAndRegisterMemory': {
       const opCodePart1Annotation: AnnotatedBits = {
