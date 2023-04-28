@@ -641,22 +641,22 @@ export function encodeBitAnnotationsWithoutLockOrRep(
       return encodeStandardLogicWithOneOrClInstruction(0b000, instruction);
 
     case 'rorRotateRight':
-      return encodeStandardLogicWithOneOrClInstruction(0b000, instruction);
+      return encodeStandardLogicWithOneOrClInstruction(0b001, instruction);
 
     case 'rclRotateThroughCarryFlagLeft':
-      return encodeStandardLogicWithOneOrClInstruction(0b000, instruction);
+      return encodeStandardLogicWithOneOrClInstruction(0b010, instruction);
 
     case 'rcrRotateThroughCarryRight':
-      return encodeStandardLogicWithOneOrClInstruction(0b000, instruction);
+      return encodeStandardLogicWithOneOrClInstruction(0b011, instruction);
 
     case 'salShiftLogicalArithmeticLeft':
-      return encodeStandardLogicWithOneOrClInstruction(0b000, instruction);
+      return encodeStandardLogicWithOneOrClInstruction(0b100, instruction);
 
     case 'shrShiftLogicalRight':
-      return encodeStandardLogicWithOneOrClInstruction(0b000, instruction);
+      return encodeStandardLogicWithOneOrClInstruction(0b101, instruction);
 
     case 'sarShiftArithmeticRight':
-      return encodeStandardLogicWithOneOrClInstruction(0b000, instruction);
+      return encodeStandardLogicWithOneOrClInstruction(0b111, instruction);
 
     case 'aamAsciiAdjustForMultiply':
       return [
