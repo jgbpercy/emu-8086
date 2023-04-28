@@ -208,7 +208,7 @@ export function encodeBitAnnotationsWithoutLockOrRep(
       return encodeWbitImmediateDataToAccumulatorInstruction(0b0010_010, instruction);
 
     case 'daaDecimalAdjustForAdd':
-      return [{ category: 'opCode', value: 0b0010_01111, length: 8 }];
+      return [{ category: 'opCode', value: 0b0010_0111, length: 8 }];
 
     case 'subRegisterMemoryAndRegisterToEither':
       return encodeModRegRmInstructionWithVariableDest(0b0010_10, instruction);
@@ -226,7 +226,7 @@ export function encodeBitAnnotationsWithoutLockOrRep(
       return encodeWbitImmediateDataToAccumulatorInstruction(0b0011_010, instruction);
 
     case 'aaaAsciiAdjustForAdd':
-      return [{ category: 'opCode', value: 0b0011_0110, length: 8 }];
+      return [{ category: 'opCode', value: 0b0011_0111, length: 8 }];
 
     case 'cmpRegisterMemoryAndRegister':
       return encodeModRegRmInstructionWithVariableDest(0b0011_10, instruction);
