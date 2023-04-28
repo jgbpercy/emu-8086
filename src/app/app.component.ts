@@ -33,9 +33,7 @@ export class AppComponent {
           let index = 0;
           for (const byte of instructionBytes) {
             console.log(
-              `${' '.repeat(4 - index.toString().length)}${index}: ${'0'.repeat(
-                8 - byte.toString(2).length,
-              )}${byte.toString(2)}`,
+              `${index.toString(10).padStart(6, ' ')}: ${byte.toString(2).padStart(8, '0')}`,
             );
 
             index++;
