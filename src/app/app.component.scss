@@ -1,0 +1,59 @@
+@use './sass/colors.scss';
+
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+h1 {
+  padding: 16px 0;
+  text-align: center;
+}
+
+h2 {
+  padding: 10px;
+  text-align: center;
+  font-size: 1.2em;
+  font-style: italic;
+}
+
+.content {
+  flex: 1 1 auto;
+  overflow-y: auto;
+}
+
+.upload-button-container {
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+$button-pad-vertical: 8px;
+$button-pad-horizontal: 12px;
+
+button {
+  border: 2px solid colors.$main-content;
+  padding: $button-pad-vertical $button-pad-horizontal;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  user-select: none;
+
+  &:hover {
+    background-color: colors.$tint;
+  }
+
+  &:focus {
+    background-color: colors.$tint;
+    outline: 2px solid colors.$main-content;
+    padding: calc($button-pad-vertical - 1px) calc($button-pad-horizontal - 1px);
+    border-width: 3px;
+  }
+}
+
+.annotated-instructions {
+  > *:not(:last-child) {
+    margin-bottom: 10px;
+  }
+}

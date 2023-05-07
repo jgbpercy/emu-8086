@@ -1,0 +1,15 @@
+<div class="line-number">
+  <span>
+    {{ annotatedInstruction.lineNumber }}
+  </span>
+</div>
+
+<div class="line-content">
+  <pre class="bit-annotations">; <annotated-bits
+      *ngFor="let bits of annotatedInstruction.annotatedBits"
+      [bits]="bits"
+      [instruction]="annotatedInstruction.instruction"
+      [class.is-byte-end]="bits.isByteEnd"
+    ></annotated-bits></pre>
+  <div class="asm">{{ annotatedInstruction.asm }}</div>
+</div>

@@ -1,31 +1,20 @@
-<input type="file" (change)="gotFile($event)" />
+<h1>JoeTDC's 8086 Disassembler/Assembler/Simulator</h1>
+<h2>🚨🐷🚨🐛🚨 This is a toy project - not complete, fast or bug-free! 🚨🐛🚨🐷🚨</h2>
 
-<ng-container *ngIf="instructionBytes">
-  <div>
-    <button (click)="decodeAndPrint()">Decode and Print</button>
+<div class="content">
+  <div class="upload-button-container" *ngIf="!annotatedInstructions">
+    <input style="display: none" type="file" (change)="gotFile($event)" #fileInput />
+
+    <button (click)="fileInput.click()">Upload File</button>
   </div>
 
-  <div>
-    <button (click)="decodeAndPrintWithBytes()">Decode and Print With Bytes</button>
+  <div *ngIf="annotatedInstructions" class="annotated-instructions">
+    <annotated-instruction
+      *ngFor="let annotatedInstruction of annotatedInstructions"
+      [annotatedInstruction]="annotatedInstruction"
+    >
+    </annotated-instruction>
   </div>
 
-  <div>
-    <button (click)="incompleteDecodeAndAnnotate()">Decode and Annotate</button>
-  </div>
-</ng-container>
-
-<pre>{{ instructionString }}</pre>
-
-<ng-container *ngIf="annotatedInstructions">
-  <ng-container *ngFor="let annotatedInstruction of annotatedInstructions; let i = index">
-    <pre>{{ i + 1 }}</pre>
-    <pre>{{ annotatedInstruction.asm }}</pre>
-    <pre>{{ annotatedInstruction.instruction.kind }}</pre>
-    <pre><span *ngFor="let bits of annotatedInstruction.annotatedBits">{{ bits.category }}: {{ bits.value.toString(2).padStart(bits.length, '0') }}  </span></pre>
-    <pre>orig: <span *ngFor="let byte of annotatedInstruction.originalBytes; let j = index"><span *ngIf="byte !== annotatedInstruction.normalizedBytes[j]">🤨</span>{{ byte.toString(2).padStart(8, '0') }}   </span></pre>
-    <pre>norm: <span *ngFor="let byte of annotatedInstruction.normalizedBytes; let j = index"><span *ngIf="byte !== annotatedInstruction.originalBytes[j]">🤨</span>{{ byte.toString(2).padStart(8, '0') }}   </span></pre>
-    <hr />
-  </ng-container>
-</ng-container>
-
-<button *ngIf="instructionString" type="button" (click)="download()">Download</button>
+  <!-- <button *ngIf="instructionString" type="button" (click)="download()">Download</button> -->
+</div>

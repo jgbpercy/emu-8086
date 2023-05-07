@@ -1,0 +1,157 @@
+@use './sass/colors.scss';
+
+:host {
+  border: 1px solid;
+  margin: 0 1px;
+  padding: 0 2px;
+  cursor: default;
+
+  &.lockPrefix {
+    border-color: colors.$lockPrefix-border;
+    color: colors.$lockPrefix-content;
+    background: colors.$lockPrefix-background;
+  }
+
+  &.repPrefix {
+    border-color: colors.$repPrefix-border;
+    color: colors.$repPrefix-content;
+    background: colors.$repPrefix-background;
+  }
+
+  &.opCode {
+    border-color: colors.$opCode-border;
+    color: colors.$opCode-content;
+    background: colors.$opCode-background;
+  }
+
+  &.mod {
+    border-color: colors.$mod-border;
+    color: colors.$mod-content;
+    background: colors.$mod-background;
+  }
+
+  &.reg {
+    border-color: colors.$reg-border;
+    color: colors.$reg-content;
+    background: colors.$reg-background;
+  }
+
+  &.rm {
+    border-color: colors.$rm-border;
+    color: colors.$rm-content;
+    background: colors.$rm-background;
+  }
+
+  &.dBit {
+    border-color: colors.$dBit-border;
+    color: colors.$dBit-content;
+    background: colors.$dBit-background;
+  }
+
+  &.wBit {
+    border-color: colors.$wBit-border;
+    color: colors.$wBit-content;
+    background: colors.$wBit-background;
+  }
+
+  &.sBit {
+    border-color: colors.$sBit-border;
+    color: colors.$sBit-content;
+    background: colors.$sBit-background;
+  }
+
+  &.vBit {
+    border-color: colors.$vBit-border;
+    color: colors.$vBit-content;
+    background: colors.$vBit-background;
+  }
+
+  &.segReg {
+    border-color: colors.$segReg-border;
+    color: colors.$segReg-content;
+    background: colors.$segReg-background;
+  }
+
+  &.segmentOverridePrefix {
+    border-color: colors.$segmentOverridePrefix-border;
+    color: colors.$segmentOverridePrefix-content;
+    background: colors.$segmentOverridePrefix-background;
+  }
+
+  &.escOpCode {
+    border-color: colors.$escOpCode-border;
+    color: colors.$escOpCode-content;
+    background: colors.$escOpCode-background;
+  }
+
+  &.ipInc8 {
+    border-color: colors.$ipInc8-border;
+    color: colors.$ipInc8-content;
+    background: colors.$ipInc8-background;
+  }
+
+  &.ipIncLo {
+    border-color: colors.$ipIncLo-border;
+    color: colors.$ipIncLo-content;
+    background: colors.$ipIncLo-background;
+  }
+
+  &.ipIncHi {
+    border-color: colors.$ipIncHi-border;
+    color: colors.$ipIncHi-content;
+    background: colors.$ipIncHi-background;
+  }
+
+  &.ipLo {
+    border-color: colors.$ipLo-border;
+    color: colors.$ipLo-content;
+    background: colors.$ipLo-background;
+  }
+
+  &.ipHi {
+    border-color: colors.$ipHi-border;
+    color: colors.$ipHi-content;
+    background: colors.$ipHi-background;
+  }
+
+  &.dispLo {
+    border-color: colors.$dispLo-border;
+    color: colors.$dispLo-content;
+    background: colors.$dispLo-background;
+  }
+
+  &.dispHi {
+    border-color: colors.$dispHi-border;
+    color: colors.$dispHi-content;
+    background: colors.$dispHi-background;
+  }
+
+  &.dataLo {
+    border-color: colors.$dataLo-border;
+    color: colors.$dataLo-content;
+    background: colors.$dataLo-background;
+  }
+
+  &.dataHi {
+    border-color: colors.$dataHi-border;
+    color: colors.$dataHi-content;
+    background: colors.$dataHi-background;
+  }
+
+  &.segLo {
+    border-color: colors.$segLo-border;
+    color: colors.$segLo-content;
+    background: colors.$segLo-background;
+  }
+
+  &.segHi {
+    border-color: colors.$segHi-border;
+    color: colors.$segHi-content;
+    background: colors.$segHi-background;
+  }
+}
+
+pre {
+  margin-right: -8px;
+  letter-spacing: 7px;
+}

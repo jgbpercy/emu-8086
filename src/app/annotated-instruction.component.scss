@@ -1,0 +1,27 @@
+$line-number-width: 45px;
+$gap: 8px;
+
+:host {
+  display: grid;
+  grid-template-columns: $line-number-width calc(100% - $line-number-width - $gap);
+  gap: $gap;
+}
+
+.line-number {
+  user-select: none;
+  color: #777777;
+  text-align: right;
+  display: flex;
+  align-items: center;
+  justify-content: right;
+}
+
+.is-byte-end {
+  margin-right: 8px;
+}
+
+.bit-annotations {
+  display: flex;
+  flex-direction: row;
+  margin-bottom: 4px;
+}

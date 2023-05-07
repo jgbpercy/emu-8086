@@ -41,13 +41,14 @@ export interface AnnotatedBits {
   readonly value: number;
   readonly length: number;
   readonly category: AnnotatedBitsCategory;
-  readonly linkedPartIndices?: ReadonlyArray<number>;
+  readonly isByteEnd: boolean;
 }
 
 const mod11Annotation: AnnotatedBits = {
   category: 'mod',
   value: 0b11,
   length: 2,
+  isByteEnd: false,
 };
 
 // 6 bytes + lock OR rep (can't see anything that can have both) + segment override = 8
@@ -109,8 +110,9 @@ export function encodeBitAnnotations(
         category: 'lockPrefix',
         value: 0b1111_0000,
         length: 8,
+        isByteEnd: true,
       },
-      ...annotatedBits.map((annotation) => incrementLinkedPartIndices(annotation)),
+      ...annotatedBits,
     ];
   }
 
@@ -120,23 +122,13 @@ export function encodeBitAnnotations(
         category: 'repPrefix',
         value: instruction.rep === 'repne ' ? 0b1111_0010 : 0b1111_0011,
         length: 8,
+        isByteEnd: true,
       },
-      ...annotatedBits.map((annotation) => incrementLinkedPartIndices(annotation)),
+      ...annotatedBits,
     ];
   }
 
   return annotatedBits;
-}
-
-function incrementLinkedPartIndices(annotation: AnnotatedBits): AnnotatedBits {
-  if (annotation.linkedPartIndices === undefined) {
-    return annotation;
-  } else {
-    return {
-      ...annotation,
-      linkedPartIndices: annotation.linkedPartIndices.map((index) => index + 1),
-    };
-  }
 }
 
 export function encodeBitAnnotationsWithoutLockOrRep(
@@ -155,14 +147,14 @@ export function encodeBitAnnotationsWithoutLockOrRep(
           category: 'opCode',
           value: 0b000,
           length: 3,
-          linkedPartIndices: [2],
+          isByteEnd: false,
         },
         encodeSegmentRegister(instruction.op1),
         {
           category: 'opCode',
           value: 0b110,
           length: 3,
-          linkedPartIndices: [0],
+          isByteEnd: true,
         },
       ];
 
@@ -172,14 +164,14 @@ export function encodeBitAnnotationsWithoutLockOrRep(
           category: 'opCode',
           value: 0b000,
           length: 3,
-          linkedPartIndices: [2],
+          isByteEnd: false,
         },
         encodeSegmentRegister(instruction.op1),
         {
           category: 'opCode',
           value: 0b111,
           length: 3,
-          linkedPartIndices: [0],
+          isByteEnd: true,
         },
       ];
 
@@ -208,7 +200,7 @@ export function encodeBitAnnotationsWithoutLockOrRep(
       return encodeWbitImmediateDataToAccumulatorInstruction(0b0010_010, instruction);
 
     case 'daaDecimalAdjustForAdd':
-      return [{ category: 'opCode', value: 0b0010_0111, length: 8 }];
+      return [{ category: 'opCode', value: 0b0010_0111, length: 8, isByteEnd: true }];
 
     case 'subRegisterMemoryAndRegisterToEither':
       return encodeModRegRmInstructionWithVariableDest(0b0010_10, instruction);
@@ -217,7 +209,7 @@ export function encodeBitAnnotationsWithoutLockOrRep(
       return encodeWbitImmediateDataToAccumulatorInstruction(0b0010_110, instruction);
 
     case 'dasDecimalAdjustForSubtract':
-      return [{ category: 'opCode', value: 0b0010_1111, length: 8 }];
+      return [{ category: 'opCode', value: 0b0010_1111, length: 8, isByteEnd: true }];
 
     case 'xorRegisterMemoryAndRegisterToEither':
       return encodeModRegRmInstructionWithVariableDest(0b0011_00, instruction);
@@ -226,7 +218,7 @@ export function encodeBitAnnotationsWithoutLockOrRep(
       return encodeWbitImmediateDataToAccumulatorInstruction(0b0011_010, instruction);
 
     case 'aaaAsciiAdjustForAdd':
-      return [{ category: 'opCode', value: 0b0011_0111, length: 8 }];
+      return [{ category: 'opCode', value: 0b0011_0111, length: 8, isByteEnd: true }];
 
     case 'cmpRegisterMemoryAndRegister':
       return encodeModRegRmInstructionWithVariableDest(0b0011_10, instruction);
@@ -235,19 +227,19 @@ export function encodeBitAnnotationsWithoutLockOrRep(
       return encodeWbitImmediateDataToAccumulatorInstruction(0b0011_110, instruction);
 
     case 'aasAsciiAdjustForSubtract':
-      return [{ category: 'opCode', value: 0b0011_1111, length: 8 }];
+      return [{ category: 'opCode', value: 0b0011_1111, length: 8, isByteEnd: true }];
 
     case 'incRegister':
-      return encodeDirectOnWordRegister(0b0100_0, instruction);
+      return encodeDirectOnWordRegisterInstruction(0b0100_0, instruction);
 
     case 'decRegister':
-      return encodeDirectOnWordRegister(0b0100_1, instruction);
+      return encodeDirectOnWordRegisterInstruction(0b0100_1, instruction);
 
     case 'pushRegister':
-      return encodeDirectOnWordRegister(0b0101_0, instruction);
+      return encodeDirectOnWordRegisterInstruction(0b0101_0, instruction);
 
     case 'popRegister':
-      return encodeDirectOnWordRegister(0b0101_1, instruction);
+      return encodeDirectOnWordRegisterInstruction(0b0101_1, instruction);
 
     case 'joJumpOnOverflow':
       return encodeShortLabelJumpInstruction(0b0111_0000, instruction);
@@ -338,6 +330,7 @@ export function encodeBitAnnotationsWithoutLockOrRep(
         category: 'opCode',
         value: 0b1000_1101,
         length: 8,
+        isByteEnd: true,
       };
 
       const modRegRmDisplacementAnnotations = encodeModRegRmDisplacementForMemoryMod(
@@ -368,19 +361,21 @@ export function encodeBitAnnotationsWithoutLockOrRep(
           category: 'opCode',
           value: 0b1001_0,
           length: 5,
+          isByteEnd: false,
         },
         {
           category: 'reg',
           value: registerEncodingTable[instruction.op2.register].regBits,
           length: 3,
+          isByteEnd: true,
         },
       ];
 
     case 'cbwConvertByteToWord':
-      return [{ category: 'opCode', value: 0b1001_1000, length: 8 }];
+      return [{ category: 'opCode', value: 0b1001_1000, length: 8, isByteEnd: true }];
 
     case 'cwdConvertWordToDoubleWord':
-      return [{ category: 'opCode', value: 0b1001_1001, length: 8 }];
+      return [{ category: 'opCode', value: 0b1001_1001, length: 8, isByteEnd: true }];
 
     case 'callDirectIntersegment':
       return [
@@ -388,25 +383,26 @@ export function encodeBitAnnotationsWithoutLockOrRep(
           category: 'opCode',
           value: 0b1001_1010,
           length: 8,
+          isByteEnd: true,
         },
         ...encodeInt16Literal(instruction.op1, 'ipLo', 'ipHi'),
         ...encodeInt16Literal(instruction.op2, 'segLo', 'segHi'),
       ];
 
     case 'wait':
-      return [{ category: 'opCode', value: 0b1001_1011, length: 8 }];
+      return [{ category: 'opCode', value: 0b1001_1011, length: 8, isByteEnd: true }];
 
     case 'pushfPushFlags':
-      return [{ category: 'opCode', value: 0b1001_1100, length: 8 }];
+      return [{ category: 'opCode', value: 0b1001_1100, length: 8, isByteEnd: true }];
 
     case 'popfPopFlags':
-      return [{ category: 'opCode', value: 0b1001_1101, length: 8 }];
+      return [{ category: 'opCode', value: 0b1001_1101, length: 8, isByteEnd: true }];
 
     case 'sahfStoreAhIntoFlags':
-      return [{ category: 'opCode', value: 0b1001_1110, length: 8 }];
+      return [{ category: 'opCode', value: 0b1001_1110, length: 8, isByteEnd: true }];
 
     case 'lahfLoadAhWithFlags':
-      return [{ category: 'opCode', value: 0b1001_1111, length: 8 }];
+      return [{ category: 'opCode', value: 0b1001_1111, length: 8, isByteEnd: true }];
 
     case 'movMemoryToAccumulator':
       return encodeMovMemoryToFromAccumulatorInstruction(
@@ -424,32 +420,50 @@ export function encodeBitAnnotationsWithoutLockOrRep(
 
     case 'movsMoveByteWord':
       return [
-        { category: 'opCode', value: 0b1010_010, length: 7 },
+        {
+          category: 'opCode',
+          value: 0b1010_010,
+          length: 7,
+          isByteEnd: false,
+        },
         {
           category: 'wBit',
           value: instruction.word ? 1 : 0,
           length: 1,
+          isByteEnd: true,
         },
       ];
 
     case 'cmpsCompareByteWord':
       return [
-        { category: 'opCode', value: 0b1010_011, length: 7 },
+        {
+          category: 'opCode',
+          value: 0b1010_011,
+          length: 7,
+          isByteEnd: false,
+        },
         {
           category: 'wBit',
           value: instruction.word ? 1 : 0,
           length: 1,
+          isByteEnd: true,
         },
       ];
 
     case 'testImmediateWithAccumulator': {
       const word = instruction.op1.register === 'ax';
       return [
-        { category: 'opCode', value: 0b1010_100, length: 7 },
+        {
+          category: 'opCode',
+          value: 0b1010_100,
+          length: 7,
+          isByteEnd: false,
+        },
         {
           category: 'wBit',
           value: word ? 1 : 0,
           length: 1,
+          isByteEnd: true,
         },
         ...encodeData(word, instruction.op2),
       ];
@@ -457,31 +471,49 @@ export function encodeBitAnnotationsWithoutLockOrRep(
 
     case 'stosStoreByteWordFromAlAx':
       return [
-        { category: 'opCode', value: 0b1010_101, length: 7 },
+        {
+          category: 'opCode',
+          value: 0b1010_101,
+          length: 7,
+          isByteEnd: false,
+        },
         {
           category: 'wBit',
           value: instruction.word ? 1 : 0,
           length: 1,
+          isByteEnd: true,
         },
       ];
 
     case 'lodsLoadByteWordFromAlAx':
       return [
-        { category: 'opCode', value: 0b1010_110, length: 7 },
+        {
+          category: 'opCode',
+          value: 0b1010_110,
+          length: 7,
+          isByteEnd: false,
+        },
         {
           category: 'wBit',
           value: instruction.word ? 1 : 0,
           length: 1,
+          isByteEnd: true,
         },
       ];
 
     case 'scasScanByteWord':
       return [
-        { category: 'opCode', value: 0b1010_111, length: 7 },
+        {
+          category: 'opCode',
+          value: 0b1010_111,
+          length: 7,
+          isByteEnd: false,
+        },
         {
           category: 'wBit',
           value: instruction.word ? 1 : 0,
           length: 1,
+          isByteEnd: true,
         },
       ];
 
@@ -489,16 +521,23 @@ export function encodeBitAnnotationsWithoutLockOrRep(
       const regData = registerEncodingTable[instruction.op1.register];
 
       return [
-        { category: 'opCode', value: 0b1011, length: 4 },
+        {
+          category: 'opCode',
+          value: 0b1011,
+          length: 4,
+          isByteEnd: false,
+        },
         {
           category: 'wBit',
           value: regData.word ? 1 : 0,
           length: 1,
+          isByteEnd: false,
         },
         {
           category: 'reg',
           value: regData.regBits,
           length: 3,
+          isByteEnd: true,
         },
         ...encodeData(regData.word, instruction.op2),
       ];
@@ -510,18 +549,27 @@ export function encodeBitAnnotationsWithoutLockOrRep(
           category: 'opCode',
           value: 0b1100_0010,
           length: 8,
+          isByteEnd: true,
         },
         ...encodeData(true, instruction.op1),
       ];
 
     case 'retWithinSegment':
-      return [{ category: 'opCode', value: 0b1100_0011, length: 8 }];
+      return [
+        {
+          category: 'opCode',
+          value: 0b1100_0011,
+          length: 8,
+          isByteEnd: true,
+        },
+      ];
 
     case 'lesLoadPointerToEs': {
       const opCodeAnnotation: AnnotatedBits = {
         category: 'opCode',
         value: 0b1100_0100,
         length: 8,
+        isByteEnd: true,
       };
 
       const modRegRmDisplacementAnnotations = encodeModRegRmDisplacementForMemoryMod(
@@ -545,6 +593,7 @@ export function encodeBitAnnotationsWithoutLockOrRep(
         category: 'opCode',
         value: 0b1100_0101,
         length: 8,
+        isByteEnd: true,
       };
 
       const modRegRmDisplacementAnnotations = encodeModRegRmDisplacementForMemoryMod(
@@ -568,14 +617,14 @@ export function encodeBitAnnotationsWithoutLockOrRep(
         category: 'opCode',
         value: 0b1100_011,
         length: 7,
-        linkedPartIndices: [3],
+        isByteEnd: false,
       };
 
       const opCodePart2Annotation: AnnotatedBits = {
         category: 'opCode',
         value: 0b000,
         length: 3,
-        linkedPartIndices: [0],
+        isByteEnd: false,
       };
 
       if (instruction.op1.kind === 'reg') {
@@ -587,6 +636,7 @@ export function encodeBitAnnotationsWithoutLockOrRep(
             category: 'wBit',
             value: regData.word ? 1 : 0,
             length: 1,
+            isByteEnd: true,
           },
           mod11Annotation,
           opCodePart2Annotation,
@@ -594,6 +644,7 @@ export function encodeBitAnnotationsWithoutLockOrRep(
             category: 'rm',
             value: regData.regBits,
             length: 3,
+            isByteEnd: true,
           },
         ];
       }
@@ -604,31 +655,13 @@ export function encodeBitAnnotationsWithoutLockOrRep(
         category: 'wBit',
         value: word ? 1 : 0,
         length: 1,
+        isByteEnd: true,
       };
 
       const { modAnnotation, rmAnnotation, displacementAnnotations } =
         encodeModRmDisplacementForMemoryOperand(instruction.op1);
 
-      if (instruction.op1.segmentOverridePrefix) {
-        return [
-          ...encodeSegmentOverridePrefix(instruction.op1.segmentOverridePrefix),
-          {
-            ...opCodePart1Annotation,
-            linkedPartIndices: [6],
-          },
-          wBitAnnotation,
-          modAnnotation,
-          {
-            ...opCodePart2Annotation,
-            linkedPartIndices: [3],
-          },
-          rmAnnotation,
-          ...displacementAnnotations,
-          ...encodeData(word, instruction.op2),
-        ];
-      }
-
-      return [
+      const annotations = [
         opCodePart1Annotation,
         wBitAnnotation,
         modAnnotation,
@@ -637,6 +670,15 @@ export function encodeBitAnnotationsWithoutLockOrRep(
         ...displacementAnnotations,
         ...encodeData(word, instruction.op2),
       ];
+
+      if (instruction.op1.segmentOverridePrefix) {
+        return [
+          ...encodeSegmentOverridePrefix(instruction.op1.segmentOverridePrefix),
+          ...annotations,
+        ];
+      }
+
+      return annotations;
     }
 
     case 'retIntersegmentAddingImmediateToSp':
@@ -645,27 +687,28 @@ export function encodeBitAnnotationsWithoutLockOrRep(
           category: 'opCode',
           value: 0b1100_1010,
           length: 8,
+          isByteEnd: true,
         },
         ...encodeData(true, instruction.op1),
       ];
 
     case 'retIntersegment':
-      return [{ category: 'opCode', value: 0b1100_1011, length: 8 }];
+      return [{ category: 'opCode', value: 0b1100_1011, length: 8, isByteEnd: true }];
 
     case 'intType3':
-      return [{ category: 'opCode', value: 0b1100_1100, length: 8 }];
+      return [{ category: 'opCode', value: 0b1100_1100, length: 8, isByteEnd: true }];
 
     case 'intTypeSpecified':
       return [
-        { category: 'opCode', value: 0b1100_1101, length: 8 },
+        { category: 'opCode', value: 0b1100_1101, length: 8, isByteEnd: true },
         ...encodeData(false, instruction.op1),
       ];
 
     case 'intoInterruptOnOverflow':
-      return [{ category: 'opCode', value: 0b1100_1110, length: 8 }];
+      return [{ category: 'opCode', value: 0b1100_1110, length: 8, isByteEnd: true }];
 
     case 'iretInterruptReturn':
-      return [{ category: 'opCode', value: 0b1100_1111, length: 8 }];
+      return [{ category: 'opCode', value: 0b1100_1111, length: 8, isByteEnd: true }];
 
     case 'rolRotateLeft':
       return encodeStandardLogicWithOneOrClInstruction(0b000, instruction);
@@ -694,13 +737,13 @@ export function encodeBitAnnotationsWithoutLockOrRep(
           category: 'opCode',
           value: 0b1101_0100,
           length: 8,
-          linkedPartIndices: [1],
+          isByteEnd: true,
         },
         {
           category: 'opCode',
           value: 0b0000_1010,
           length: 8,
-          linkedPartIndices: [0],
+          isByteEnd: true,
         },
       ];
 
@@ -710,13 +753,13 @@ export function encodeBitAnnotationsWithoutLockOrRep(
           category: 'opCode',
           value: 0b1101_0101,
           length: 8,
-          linkedPartIndices: [1],
+          isByteEnd: true,
         },
         {
           category: 'opCode',
           value: 0b0000_1010,
           length: 8,
-          linkedPartIndices: [0],
+          isByteEnd: true,
         },
       ];
 
@@ -726,6 +769,7 @@ export function encodeBitAnnotationsWithoutLockOrRep(
           category: 'opCode',
           length: 8,
           value: 0b1101_0111,
+          isByteEnd: true,
         },
       ];
 
@@ -734,20 +778,21 @@ export function encodeBitAnnotationsWithoutLockOrRep(
         category: 'opCode',
         value: 0b1101_1,
         length: 5,
+        isByteEnd: false,
       };
 
       const escOpCodePart1Annotation: AnnotatedBits = {
         category: 'escOpCode',
         value: instruction.op1 & (0b1110_00 >> 3),
         length: 3,
-        linkedPartIndices: [3],
+        isByteEnd: true,
       };
 
       const escOpCodePart2Annotation: AnnotatedBits = {
         category: 'escOpCode',
         value: instruction.op1 & 0b0001_11,
         length: 3,
-        linkedPartIndices: [1],
+        isByteEnd: false,
       };
 
       if (instruction.op2.kind === 'reg') {
@@ -762,39 +807,31 @@ export function encodeBitAnnotationsWithoutLockOrRep(
             category: 'rm',
             value: regData.regBits,
             length: 3,
+            isByteEnd: true,
           },
         ];
-      } else {
-        const { modAnnotation, rmAnnotation, displacementAnnotations } =
-          encodeModRmDisplacementForMemoryOperand(instruction.op2);
-
-        if (instruction.op2.segmentOverridePrefix) {
-          return [
-            ...encodeSegmentOverridePrefix(instruction.op2.segmentOverridePrefix),
-            opCodeAnnotation,
-            {
-              ...escOpCodePart1Annotation,
-              linkedPartIndices: [6],
-            },
-            modAnnotation,
-            {
-              ...escOpCodePart2Annotation,
-              linkedPartIndices: [4],
-            },
-            rmAnnotation,
-            ...displacementAnnotations,
-          ];
-        } else {
-          return [
-            opCodeAnnotation,
-            escOpCodePart1Annotation,
-            modAnnotation,
-            escOpCodePart2Annotation,
-            rmAnnotation,
-            ...displacementAnnotations,
-          ];
-        }
       }
+
+      const { modAnnotation, rmAnnotation, displacementAnnotations } =
+        encodeModRmDisplacementForMemoryOperand(instruction.op2);
+
+      const annotations = [
+        opCodeAnnotation,
+        escOpCodePart1Annotation,
+        modAnnotation,
+        escOpCodePart2Annotation,
+        rmAnnotation,
+        ...displacementAnnotations,
+      ];
+
+      if (instruction.op2.segmentOverridePrefix) {
+        return [
+          ...encodeSegmentOverridePrefix(instruction.op2.segmentOverridePrefix),
+          ...annotations,
+        ];
+      }
+
+      return annotations;
     }
 
     case 'loopneLoopWhileNotEqual':
@@ -827,6 +864,7 @@ export function encodeBitAnnotationsWithoutLockOrRep(
           category: 'opCode',
           value: 0b1110_1010,
           length: 8,
+          isByteEnd: true,
         },
         ...encodeInt16Literal(instruction.op1, 'ipLo', 'ipHi'),
         ...encodeInt16Literal(instruction.op2, 'segLo', 'segHi'),
@@ -838,11 +876,13 @@ export function encodeBitAnnotationsWithoutLockOrRep(
           category: 'opCode',
           value: 0b1110_1011,
           length: 8,
+          isByteEnd: true,
         },
         {
           category: 'ipInc8',
           value: instruction.op1,
           length: 8,
+          isByteEnd: true,
         },
       ];
 
@@ -853,24 +893,24 @@ export function encodeBitAnnotationsWithoutLockOrRep(
       return encodeInOutVariablePort(0b1110_111, instruction.op2);
 
     case 'hltHalt':
-      return [{ category: 'opCode', value: 0b1111_0100, length: 8 }];
+      return [{ category: 'opCode', value: 0b1111_0100, length: 8, isByteEnd: true }];
 
     case 'cmcComplementCarry':
-      return [{ category: 'opCode', value: 0b1111_0101, length: 8 }];
+      return [{ category: 'opCode', value: 0b1111_0101, length: 8, isByteEnd: true }];
 
     case 'testImmediateDataAndRegisterMemory': {
       const opCodePart1Annotation: AnnotatedBits = {
         category: 'opCode',
         value: 0b1111_011,
         length: 7,
-        linkedPartIndices: [3],
+        isByteEnd: false,
       };
 
       const opCodePart2Annotation: AnnotatedBits = {
         category: 'opCode',
         value: 0b000,
         length: 3,
-        linkedPartIndices: [0],
+        isByteEnd: false,
       };
 
       if (instruction.op1.kind === 'reg') {
@@ -882,6 +922,7 @@ export function encodeBitAnnotationsWithoutLockOrRep(
             category: 'wBit',
             value: regData.word ? 1 : 0,
             length: 1,
+            isByteEnd: true,
           },
           mod11Annotation,
           opCodePart2Annotation,
@@ -889,50 +930,42 @@ export function encodeBitAnnotationsWithoutLockOrRep(
             category: 'rm',
             value: regData.regBits,
             length: 3,
+            isByteEnd: true,
           },
           ...encodeData(regData.word, instruction.op2),
         ];
-      } else {
-        const word = instruction.op1.length === 2;
-
-        const wBitAnnotation: AnnotatedBits = {
-          category: 'wBit',
-          value: word ? 1 : 0,
-          length: 1,
-        };
-
-        const { modAnnotation, rmAnnotation, displacementAnnotations } =
-          encodeModRmDisplacementForMemoryOperand(instruction.op1);
-
-        if (instruction.op1.segmentOverridePrefix) {
-          return [
-            ...encodeSegmentOverridePrefix(instruction.op1.segmentOverridePrefix),
-            {
-              ...opCodePart1Annotation,
-              linkedPartIndices: [6],
-            },
-            wBitAnnotation,
-            modAnnotation,
-            {
-              ...opCodePart2Annotation,
-              linkedPartIndices: [3],
-            },
-            rmAnnotation,
-            ...displacementAnnotations,
-            ...encodeData(word, instruction.op2),
-          ];
-        } else {
-          return [
-            opCodePart1Annotation,
-            wBitAnnotation,
-            modAnnotation,
-            opCodePart2Annotation,
-            rmAnnotation,
-            ...displacementAnnotations,
-            ...encodeData(word, instruction.op2),
-          ];
-        }
       }
+
+      const word = instruction.op1.length === 2;
+
+      const wBitAnnotation: AnnotatedBits = {
+        category: 'wBit',
+        value: word ? 1 : 0,
+        length: 1,
+        isByteEnd: true,
+      };
+
+      const { modAnnotation, rmAnnotation, displacementAnnotations } =
+        encodeModRmDisplacementForMemoryOperand(instruction.op1);
+
+      const annotations = [
+        opCodePart1Annotation,
+        wBitAnnotation,
+        modAnnotation,
+        opCodePart2Annotation,
+        rmAnnotation,
+        ...displacementAnnotations,
+        ...encodeData(word, instruction.op2),
+      ];
+
+      if (instruction.op1.segmentOverridePrefix) {
+        return [
+          ...encodeSegmentOverridePrefix(instruction.op1.segmentOverridePrefix),
+          ...annotations,
+        ];
+      }
+
+      return annotations;
     }
 
     case 'notInvert':
@@ -954,22 +987,22 @@ export function encodeBitAnnotationsWithoutLockOrRep(
       return encodeSingleOperandMathInstruction(0b1111_011, 0b111, instruction);
 
     case 'clcClearCarry':
-      return [{ category: 'opCode', value: 0b1111_1000, length: 8 }];
+      return [{ category: 'opCode', value: 0b1111_1000, length: 8, isByteEnd: true }];
 
     case 'stcSetCarry':
-      return [{ category: 'opCode', value: 0b1111_1001, length: 8 }];
+      return [{ category: 'opCode', value: 0b1111_1001, length: 8, isByteEnd: true }];
 
     case 'cliClearInterrupt':
-      return [{ category: 'opCode', value: 0b1111_1010, length: 8 }];
+      return [{ category: 'opCode', value: 0b1111_1010, length: 8, isByteEnd: true }];
 
     case 'stiSetInterrupt':
-      return [{ category: 'opCode', value: 0b1111_1011, length: 8 }];
+      return [{ category: 'opCode', value: 0b1111_1011, length: 8, isByteEnd: true }];
 
     case 'cldClearDirection':
-      return [{ category: 'opCode', value: 0b1111_1100, length: 8 }];
+      return [{ category: 'opCode', value: 0b1111_1100, length: 8, isByteEnd: true }];
 
     case 'stdSetDirection':
-      return [{ category: 'opCode', value: 0b1111_1101, length: 8 }];
+      return [{ category: 'opCode', value: 0b1111_1101, length: 8, isByteEnd: true }];
 
     case 'incRegisterMemory':
       return encodeSingleOperandMathInstruction(0b1111_111, 0b000, instruction);
@@ -1009,14 +1042,14 @@ function encodeModRmNoWbitInstruction(
     category: 'opCode',
     value: opCodePart1,
     length: 8,
-    linkedPartIndices: [2],
+    isByteEnd: true,
   };
 
   const opCodePart2Annotation: AnnotatedBits = {
     category: 'opCode',
     value: opCodePart2,
     length: 3,
-    linkedPartIndices: [0],
+    isByteEnd: false,
   };
 
   if (instruction.op1.kind === 'reg') {
@@ -1030,37 +1063,27 @@ function encodeModRmNoWbitInstruction(
         category: 'rm',
         value: regData.regBits,
         length: 3,
+        isByteEnd: true,
       },
     ];
-  } else {
-    const { modAnnotation, rmAnnotation, displacementAnnotations } =
-      encodeModRmDisplacementForMemoryOperand(instruction.op1);
-
-    if (instruction.op1.segmentOverridePrefix) {
-      return [
-        ...encodeSegmentOverridePrefix(instruction.op1.segmentOverridePrefix),
-        {
-          ...opCodePart1Annotation,
-          linkedPartIndices: [5],
-        },
-        modAnnotation,
-        {
-          ...opCodePart2Annotation,
-          linkedPartIndices: [3],
-        },
-        rmAnnotation,
-        ...displacementAnnotations,
-      ];
-    } else {
-      return [
-        opCodePart1Annotation,
-        modAnnotation,
-        opCodePart2Annotation,
-        rmAnnotation,
-        ...displacementAnnotations,
-      ];
-    }
   }
+
+  const { modAnnotation, rmAnnotation, displacementAnnotations } =
+    encodeModRmDisplacementForMemoryOperand(instruction.op1);
+
+  const annotations = [
+    opCodePart1Annotation,
+    modAnnotation,
+    opCodePart2Annotation,
+    rmAnnotation,
+    ...displacementAnnotations,
+  ];
+
+  if (instruction.op1.segmentOverridePrefix) {
+    return [...encodeSegmentOverridePrefix(instruction.op1.segmentOverridePrefix), ...annotations];
+  }
+
+  return annotations;
 }
 
 function encodeSingleOperandMathInstruction(
@@ -1074,14 +1097,14 @@ function encodeSingleOperandMathInstruction(
     category: 'opCode',
     value: opCodePart1,
     length: 7,
-    linkedPartIndices: [3],
+    isByteEnd: false,
   };
 
   const opCodePart2Annotation: AnnotatedBits = {
     category: 'opCode',
     value: opCodePart2,
     length: 3,
-    linkedPartIndices: [0],
+    isByteEnd: false,
   };
 
   if (instruction.op1.kind === 'reg') {
@@ -1093,6 +1116,7 @@ function encodeSingleOperandMathInstruction(
         category: 'wBit',
         value: regData.word ? 1 : 0,
         length: 1,
+        isByteEnd: true,
       },
       mod11Annotation,
       opCodePart2Annotation,
@@ -1100,47 +1124,37 @@ function encodeSingleOperandMathInstruction(
         category: 'rm',
         value: regData.regBits,
         length: 3,
+        isByteEnd: true,
       },
     ];
-  } else {
-    const word = instruction.op1.length === 2;
-
-    const wBitAnnotation: AnnotatedBits = {
-      category: 'wBit',
-      value: word ? 1 : 0,
-      length: 1,
-    };
-
-    const { modAnnotation, rmAnnotation, displacementAnnotations } =
-      encodeModRmDisplacementForMemoryOperand(instruction.op1);
-
-    if (instruction.op1.segmentOverridePrefix) {
-      return [
-        ...encodeSegmentOverridePrefix(instruction.op1.segmentOverridePrefix),
-        {
-          ...opCodePart1Annotation,
-          linkedPartIndices: [6],
-        },
-        wBitAnnotation,
-        modAnnotation,
-        {
-          ...opCodePart2Annotation,
-          linkedPartIndices: [3],
-        },
-        rmAnnotation,
-        ...displacementAnnotations,
-      ];
-    } else {
-      return [
-        opCodePart1Annotation,
-        wBitAnnotation,
-        modAnnotation,
-        opCodePart2Annotation,
-        rmAnnotation,
-        ...displacementAnnotations,
-      ];
-    }
   }
+
+  const word = instruction.op1.length === 2;
+
+  const wBitAnnotation: AnnotatedBits = {
+    category: 'wBit',
+    value: word ? 1 : 0,
+    length: 1,
+    isByteEnd: true,
+  };
+
+  const { modAnnotation, rmAnnotation, displacementAnnotations } =
+    encodeModRmDisplacementForMemoryOperand(instruction.op1);
+
+  const annotations = [
+    opCodePart1Annotation,
+    wBitAnnotation,
+    modAnnotation,
+    opCodePart2Annotation,
+    rmAnnotation,
+    ...displacementAnnotations,
+  ];
+
+  if (instruction.op1.segmentOverridePrefix) {
+    return [...encodeSegmentOverridePrefix(instruction.op1.segmentOverridePrefix), ...annotations];
+  }
+
+  return annotations;
 }
 
 function encodeCallJumpDirectWithinSegment(
@@ -1154,6 +1168,7 @@ function encodeCallJumpDirectWithinSegment(
       category: 'opCode',
       value: opCode,
       length: 8,
+      isByteEnd: true,
     },
     ...encodeLoHiIpInc(instruction.op1),
   ];
@@ -1168,11 +1183,13 @@ function encodeInOutVariablePort(
       category: 'opCode',
       value: opCode,
       length: 7,
+      isByteEnd: false,
     },
     {
       category: 'wBit',
       value: reg.register === 'al' ? 0 : 1,
       length: 1,
+      isByteEnd: true,
     },
   ];
 }
@@ -1187,16 +1204,19 @@ function encodeInOutFixedPort(
       category: 'opCode',
       value: opCode,
       length: 7,
+      isByteEnd: false,
     },
     {
       category: 'wBit',
       value: reg.register === 'al' ? 0 : 1,
       length: 1,
+      isByteEnd: true,
     },
     {
       category: 'dataLo',
       length: 8,
       value: data,
+      isByteEnd: true,
     },
   ];
 }
@@ -1212,20 +1232,21 @@ function encodeStandardLogicWithOneOrClInstruction(
     category: 'opCode',
     value: 0b1101_00,
     length: 6,
-    linkedPartIndices: [3],
+    isByteEnd: false,
   };
 
   const vBitAnnotation: AnnotatedBits = {
     category: 'vBit',
     value: instruction.op2 === 1 ? 0 : 1,
     length: 1,
+    isByteEnd: false,
   };
 
   const opCodePart2Annotation: AnnotatedBits = {
     category: 'opCode',
     value: opCodePart2,
     length: 3,
-    linkedPartIndices: [0],
+    isByteEnd: false,
   };
 
   if (instruction.op1.kind === 'reg') {
@@ -1238,6 +1259,7 @@ function encodeStandardLogicWithOneOrClInstruction(
         category: 'wBit',
         value: regData.word ? 1 : 0,
         length: 1,
+        isByteEnd: true,
       },
       mod11Annotation,
       opCodePart2Annotation,
@@ -1245,49 +1267,38 @@ function encodeStandardLogicWithOneOrClInstruction(
         category: 'rm',
         value: regData.regBits,
         length: 3,
+        isByteEnd: true,
       },
     ];
-  } else {
-    const word = instruction.op1.length === 2;
-
-    const wBitAnnotation: AnnotatedBits = {
-      category: 'wBit',
-      value: word ? 1 : 0,
-      length: 1,
-    };
-
-    const { modAnnotation, rmAnnotation, displacementAnnotations } =
-      encodeModRmDisplacementForMemoryOperand(instruction.op1);
-
-    if (instruction.op1.segmentOverridePrefix) {
-      return [
-        ...encodeSegmentOverridePrefix(instruction.op1.segmentOverridePrefix),
-        {
-          ...opCodePart1Annotation,
-          linkedPartIndices: [6],
-        },
-        vBitAnnotation,
-        wBitAnnotation,
-        modAnnotation,
-        {
-          ...opCodePart2Annotation,
-          linkedPartIndices: [3],
-        },
-        rmAnnotation,
-        ...displacementAnnotations,
-      ];
-    } else {
-      return [
-        opCodePart1Annotation,
-        vBitAnnotation,
-        wBitAnnotation,
-        modAnnotation,
-        opCodePart2Annotation,
-        rmAnnotation,
-        ...displacementAnnotations,
-      ];
-    }
   }
+
+  const word = instruction.op1.length === 2;
+
+  const wBitAnnotation: AnnotatedBits = {
+    category: 'wBit',
+    value: word ? 1 : 0,
+    length: 1,
+    isByteEnd: true,
+  };
+
+  const { modAnnotation, rmAnnotation, displacementAnnotations } =
+    encodeModRmDisplacementForMemoryOperand(instruction.op1);
+
+  const annotations = [
+    opCodePart1Annotation,
+    vBitAnnotation,
+    wBitAnnotation,
+    modAnnotation,
+    opCodePart2Annotation,
+    rmAnnotation,
+    ...displacementAnnotations,
+  ];
+
+  if (instruction.op1.segmentOverridePrefix) {
+    return [...encodeSegmentOverridePrefix(instruction.op1.segmentOverridePrefix), ...annotations];
+  }
+
+  return annotations;
 }
 
 function encodeModRegRmInstructionWithVariableDest(
@@ -1301,6 +1312,7 @@ function encodeModRegRmInstructionWithVariableDest(
     category: 'opCode',
     value: opCode,
     length: 6,
+    isByteEnd: false,
   };
 
   if (instruction.op1.kind === 'reg' && instruction.op2.kind === 'reg') {
@@ -1310,6 +1322,7 @@ function encodeModRegRmInstructionWithVariableDest(
         category: 'dBit',
         value: 0,
         length: 1,
+        isByteEnd: false,
       },
       ...encodeWbitModRegRmForMod11(instruction.op2, instruction.op1),
     ];
@@ -1318,6 +1331,7 @@ function encodeModRegRmInstructionWithVariableDest(
       category: 'dBit',
       value: instruction.op1.kind === 'reg' ? 1 : 0,
       length: 1,
+      isByteEnd: false,
     };
 
     const { registerOperand, memoryOperand } = getRegisterMemoryOperands(instruction);
@@ -1354,6 +1368,7 @@ function encodeModRegRmInstructionWithFixedDest(
     category: 'opCode',
     value: opCode,
     length: 7,
+    isByteEnd: false,
   };
 
   if (instruction.op1.kind === 'reg' && instruction.op2.kind === 'reg') {
@@ -1390,17 +1405,20 @@ function encodeWbitModRegRmForMod11(
       category: 'wBit',
       value: regRegisterData.word ? 1 : 0,
       length: 1,
+      isByteEnd: true,
     },
     mod11Annotation,
     {
       category: 'reg',
       value: regRegisterData.regBits,
       length: 3,
+      isByteEnd: false,
     },
     {
       category: 'rm',
       value: rmRegisterData.regBits,
       length: 3,
+      isByteEnd: true,
     },
   ];
 }
@@ -1415,6 +1433,7 @@ function encodeWbitModRegRmForMemoryMod(
     category: 'wBit',
     value: regData.word ? 1 : 0,
     length: 1,
+    isByteEnd: true,
   };
 
   return [wBitAnnotation, ...encodeModRegRmDisplacementForMemoryMod(regData, memoryOperand)];
@@ -1448,6 +1467,7 @@ function encodeModRegRmDisplacementForMemoryMod(
       category: 'reg',
       value: regData.regBits,
       length: 3,
+      isByteEnd: false,
     },
     rmAnnotation,
     ...displacementAnnotations,
@@ -1462,14 +1482,14 @@ function encodeSegmentOverridePrefix(
       category: 'segmentOverridePrefixCode',
       value: 0b001,
       length: 3,
-      linkedPartIndices: [2],
+      isByteEnd: false,
     },
     encodeSegmentRegister(segmentRegister),
     {
       category: 'segmentOverridePrefixCode',
       value: 0b110,
       length: 3,
-      linkedPartIndices: [0],
+      isByteEnd: true,
     },
   ];
 }
@@ -1485,14 +1505,14 @@ function encodeStandardArithmeticLogicImmediateToRegisterMemoryInstruction(
     category: 'opCode',
     value: 0b1000_00,
     length: 6,
-    linkedPartIndices: [3],
+    isByteEnd: false,
   };
 
   const opCodePart2Annotation: AnnotatedBits = {
     category: 'opCode',
     value: opCodePart2,
     length: 3,
-    linkedPartIndices: [0],
+    isByteEnd: false,
   };
 
   if (instruction.op1.kind === 'reg') {
@@ -1506,11 +1526,13 @@ function encodeStandardArithmeticLogicImmediateToRegisterMemoryInstruction(
         category: 'sBit',
         value: sBit,
         length: 1,
+        isByteEnd: false,
       },
       {
         category: 'wBit',
         value: regData.word ? 1 : 0,
         length: 1,
+        isByteEnd: true,
       },
       mod11Annotation,
       opCodePart2Annotation,
@@ -1518,62 +1540,51 @@ function encodeStandardArithmeticLogicImmediateToRegisterMemoryInstruction(
         category: 'rm',
         value: regData.regBits,
         length: 3,
+        isByteEnd: true,
       },
       ...encodeData(regData.word && !sBit, instruction.op2),
     ];
-  } else {
-    const word = instruction.op1.length === 2;
-
-    const wBitAnnotation: AnnotatedBits = {
-      category: 'wBit',
-      value: word ? 1 : 0,
-      length: 1,
-    };
-
-    const { modAnnotation, rmAnnotation, displacementAnnotations } =
-      encodeModRmDisplacementForMemoryOperand(instruction.op1);
-
-    const sBit = word && instruction.op2 >= -128 && instruction.op2 <= 127 ? 1 : 0;
-
-    const sBitAnnotation: AnnotatedBits = {
-      category: 'sBit',
-      value: sBit,
-      length: 1,
-    };
-
-    const dataAnnotations = encodeData(word && !sBit, instruction.op2);
-
-    if (instruction.op1.segmentOverridePrefix) {
-      return [
-        ...encodeSegmentOverridePrefix(instruction.op1.segmentOverridePrefix),
-        {
-          ...opCodePart1Annotation,
-          linkedPartIndices: [6],
-        },
-        sBitAnnotation,
-        wBitAnnotation,
-        modAnnotation,
-        {
-          ...opCodePart2Annotation,
-          linkedPartIndices: [3],
-        },
-        rmAnnotation,
-        ...displacementAnnotations,
-        ...dataAnnotations,
-      ];
-    } else {
-      return [
-        opCodePart1Annotation,
-        sBitAnnotation,
-        wBitAnnotation,
-        modAnnotation,
-        opCodePart2Annotation,
-        rmAnnotation,
-        ...displacementAnnotations,
-        ...dataAnnotations,
-      ];
-    }
   }
+
+  const word = instruction.op1.length === 2;
+
+  const wBitAnnotation: AnnotatedBits = {
+    category: 'wBit',
+    value: word ? 1 : 0,
+    length: 1,
+    isByteEnd: true,
+  };
+
+  const { modAnnotation, rmAnnotation, displacementAnnotations } =
+    encodeModRmDisplacementForMemoryOperand(instruction.op1);
+
+  const sBit = word && instruction.op2 >= -128 && instruction.op2 <= 127 ? 1 : 0;
+
+  const sBitAnnotation: AnnotatedBits = {
+    category: 'sBit',
+    value: sBit,
+    length: 1,
+    isByteEnd: false,
+  };
+
+  const dataAnnotations = encodeData(word && !sBit, instruction.op2);
+
+  const annotations = [
+    opCodePart1Annotation,
+    sBitAnnotation,
+    wBitAnnotation,
+    modAnnotation,
+    opCodePart2Annotation,
+    rmAnnotation,
+    ...displacementAnnotations,
+    ...dataAnnotations,
+  ];
+
+  if (instruction.op1.segmentOverridePrefix) {
+    return [...encodeSegmentOverridePrefix(instruction.op1.segmentOverridePrefix), ...annotations];
+  }
+
+  return annotations;
 }
 
 function encodeSegmentRegisterMovInstruction(
@@ -1585,20 +1596,21 @@ function encodeSegmentRegisterMovInstruction(
     category: 'opCode',
     value: opCodePart1,
     length: 8,
-    linkedPartIndices: [2],
+    isByteEnd: true,
   };
 
   const opCodePart2Annotation: AnnotatedBits = {
     category: 'opCode',
     value: 0,
     length: 1,
-    linkedPartIndices: [0],
+    isByteEnd: false,
   };
 
   const segmentRegisterAnnotation: AnnotatedBits = {
     category: 'segReg',
     value: segmentRegisterEncodingTable[segmentRegister],
     length: 2,
+    isByteEnd: false,
   };
 
   if (registerOrEac.kind === 'reg') {
@@ -1613,6 +1625,7 @@ function encodeSegmentRegisterMovInstruction(
         category: 'rm',
         value: regData.regBits,
         length: 3,
+        isByteEnd: true,
       },
     ];
   }
@@ -1620,25 +1633,7 @@ function encodeSegmentRegisterMovInstruction(
   const { modAnnotation, rmAnnotation, displacementAnnotations } =
     encodeModRmDisplacementForMemoryOperand(registerOrEac);
 
-  if (registerOrEac.segmentOverridePrefix) {
-    return [
-      ...encodeSegmentOverridePrefix(registerOrEac.segmentOverridePrefix),
-      {
-        ...opCodePart1Annotation,
-        linkedPartIndices: [6],
-      },
-      modAnnotation,
-      {
-        ...opCodePart2Annotation,
-        linkedPartIndices: [3],
-      },
-      segmentRegisterAnnotation,
-      rmAnnotation,
-      ...displacementAnnotations,
-    ];
-  }
-
-  return [
+  const annotations = [
     opCodePart1Annotation,
     modAnnotation,
     opCodePart2Annotation,
@@ -1646,6 +1641,12 @@ function encodeSegmentRegisterMovInstruction(
     rmAnnotation,
     ...displacementAnnotations,
   ];
+
+  if (registerOrEac.segmentOverridePrefix) {
+    return [...encodeSegmentOverridePrefix(registerOrEac.segmentOverridePrefix), ...annotations];
+  }
+
+  return annotations;
 }
 
 function encodeMovMemoryToFromAccumulatorInstruction(
@@ -1658,11 +1659,13 @@ function encodeMovMemoryToFromAccumulatorInstruction(
       category: 'opCode',
       value: opCode,
       length: 7,
+      isByteEnd: false,
     },
     {
       category: 'wBit',
       value: register.register === 'al' ? 0 : 1,
       length: 1,
+      isByteEnd: true,
     },
     ...encodeLoHiDisplacement(addr),
   ];
@@ -1688,6 +1691,7 @@ function encodeModRmDisplacementForMemoryOperand(op: EffectiveAddressCalculation
         category: 'dispLo',
         value: 0,
         length: 8,
+        isByteEnd: true,
       });
     } else {
       displacementBytes = 0;
@@ -1698,6 +1702,7 @@ function encodeModRmDisplacementForMemoryOperand(op: EffectiveAddressCalculation
       category: 'dispLo',
       value: toTwosComplementBits(op.displacement),
       length: 8,
+      isByteEnd: true,
     });
   } else {
     displacementBytes = 2;
@@ -1716,11 +1721,13 @@ function encodeModRmDisplacementForMemoryOperand(op: EffectiveAddressCalculation
       category: 'mod',
       value: memData.modBits,
       length: 2,
+      isByteEnd: false,
     },
     rmAnnotation: {
       category: 'rm',
       value: memData.rmBits,
       length: 3,
+      isByteEnd: true,
     },
     displacementAnnotations: displacement,
   };
@@ -1740,11 +1747,13 @@ function encodeWbitImmediateDataToAccumulatorInstruction(
       category: 'opCode',
       value: opCode,
       length: 7,
+      isByteEnd: false,
     },
     {
       category: 'wBit',
       value: word ? 1 : 0,
       length: 1,
+      isByteEnd: true,
     },
     ...encodeData(word, instruction.op2),
   ];
@@ -1755,10 +1764,11 @@ function encodeSegmentRegister(segmentRegister: SegmentRegister): AnnotatedBits 
     category: 'segReg',
     value: segmentRegisterEncodingTable[segmentRegister],
     length: 2,
+    isByteEnd: false,
   };
 }
 
-function encodeDirectOnWordRegister(
+function encodeDirectOnWordRegisterInstruction(
   opCode: number,
   instruction: {
     op1: WordRegister;
@@ -1769,11 +1779,13 @@ function encodeDirectOnWordRegister(
       category: 'opCode',
       value: opCode,
       length: 5,
+      isByteEnd: false,
     },
     {
       category: 'reg',
       value: registerEncodingTable[instruction.op1.register].regBits,
       length: 3,
+      isByteEnd: true,
     },
   ];
 }
@@ -1789,11 +1801,13 @@ function encodeShortLabelJumpInstruction(
       category: 'opCode',
       value: opCode,
       length: 8,
+      isByteEnd: true,
     },
     {
       category: 'ipInc8',
       value: instruction.op1,
       length: 8,
+      isByteEnd: false,
     },
   ];
 }
@@ -1807,6 +1821,7 @@ function encodeData(word: boolean, value: number): ReadonlyArray<AnnotatedBits> 
         category: 'dataLo',
         value: toTwosComplementBits(value),
         length: 8,
+        isByteEnd: true,
       },
     ];
   }
@@ -1836,11 +1851,13 @@ function encodeInt16Literal(
       category: loCategory,
       value: twosComplementBits & 0xff,
       length: 8,
+      isByteEnd: true,
     },
     {
       category: hiCategory,
       value: (twosComplementBits & 0xff00) >> 8,
       length: 8,
+      isByteEnd: true,
     },
   ];
 }
