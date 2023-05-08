@@ -16,10 +16,8 @@
 
 <div class="simulation-state-diff">
   <ng-container *ngIf="simulationStateDiff">
-    <span *ngFor="let diff of simulationStateDiff; let isLast = last"
-      >{{ diff.key }}: 0x{{ diff.from.toString(16).padStart(4, '0') }} -> 0x{{
-        diff.to.toString(16).padStart(4, '0')
-      }}</span
+    <ng-container *ngFor="let diff of simulationStateDiff; last as isLast"
+      >{{ diff | printDiff }}<ng-container *ngIf="!isLast"> | </ng-container></ng-container
     >
   </ng-container>
 </div>

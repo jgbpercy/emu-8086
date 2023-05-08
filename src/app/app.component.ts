@@ -6,13 +6,15 @@ import {
 } from './annotated-instruction.component';
 import { decodeInstructions } from './decoder';
 import { encodeBitAnnotations } from './encoder';
+import { FlagPipe } from './flag.pipe';
+import { NumPipe } from './num.pipe';
 import { printDecodedInstruction } from './printer';
 import { SimulationState, SimulationStateDiff, simulateInstruction } from './simulator';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, AnnotatedInstructionComponent],
+  imports: [CommonModule, AnnotatedInstructionComponent, NumPipe, FlagPipe],
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.scss'],
 })
@@ -36,6 +38,16 @@ export class AppComponent {
     ds: 0,
     es: 0,
     ss: 0,
+
+    trapFlag: false,
+    directionFlag: false,
+    interruptFlag: false,
+    overflowFlag: false,
+    signFlag: false,
+    zeroFlag: false,
+    auxCarryFlag: false,
+    parityFlag: false,
+    carryFlag: false,
   };
 
   gotFile(evt: Event): void {

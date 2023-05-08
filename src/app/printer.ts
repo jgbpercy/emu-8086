@@ -4,6 +4,7 @@ import {
   EffectiveAddressCalculation,
   Operand,
 } from './decoder';
+import { printNum } from './num.pipe';
 
 const bitsDirective = 'bits 16';
 
@@ -442,14 +443,10 @@ function printSignedAsOperation(val: number, spaces: boolean): string {
   }
 }
 
-const zeroString = '0';
-
 // Lazy implementation
 function toByteString(positiveU8Byte: number): string {
   const bigNibble = (positiveU8Byte & 0b1111_0000) >> 4;
   const smallNibble = positiveU8Byte & 0b0000_1111;
 
-  return `${bigNibble.toString(2).padStart(4, zeroString)} ${smallNibble
-    .toString(2)
-    .padStart(4, zeroString)}`;
+  return `${printNum(bigNibble, 2, 4)} ${printNum(smallNibble, 2, 4)}`;
 }

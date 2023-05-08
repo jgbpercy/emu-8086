@@ -1635,6 +1635,11 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
       let data = decodeIntLiteralData(context, wBitForDataDecode);
 
       if (sBit) {
+        // This is maybe dodgy. It's the only way we get negative values into data,
+        // and that requires special casing in the encoder and simulator to handle correctly.
+        // Although the sBit is just kinda cursed so perhaps this is the best way - the encoder
+        // would have to do some equally cursed stuff to get the right bytes out if we didn't
+        // do this.
         data = getAsTwosComplement(data, 127);
       }
 

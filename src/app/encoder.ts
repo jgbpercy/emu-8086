@@ -1865,14 +1865,6 @@ function encodeInt16Literal(
   ];
 }
 
-function toByteString(byte: number): string {
-  return toBitsString(byte, 8);
-}
-
-function toBitsString(value: number, bitLength: number): string {
-  return value.toString(2).padStart(bitLength, '0');
-}
-
 function toTwosComplementBits(val: number): number {
   if (val >= 0) {
     return val;

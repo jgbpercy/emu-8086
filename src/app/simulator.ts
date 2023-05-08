@@ -22,6 +22,16 @@ export interface SimulationState {
   ds: number;
   es: number;
   ss: number;
+
+  trapFlag: boolean;
+  directionFlag: boolean;
+  interruptFlag: boolean;
+  overflowFlag: boolean;
+  signFlag: boolean;
+  zeroFlag: boolean;
+  auxCarryFlag: boolean;
+  parityFlag: boolean;
+  carryFlag: boolean;
 }
 
 type KeyOfType<TObject, TValue> = {
@@ -52,18 +62,108 @@ export function simulateInstruction(
 }
 
 function simulateInstructionDiff(
-  state: SimulationState,
+  state: Readonly<SimulationState>,
   instruction: DecodedInstruction,
 ): Readonly<SimulationStateDiff> {
   switch (instruction.kind) {
+    case 'addRegisterMemoryWithRegisterToEither': {
+      const dest = instruction.op1;
+      const source = instruction.op2;
+
+      if (dest.kind === 'reg' && source.kind === 'reg') {
+        const sourceValue = getRegisterValue(state, source);
+
+        return makeRegisterDestinationAddDiffs(state, dest, sourceValue);
+      } else {
+        return [];
+      }
+    }
+
+    case 'addImmediateToAccumulator':
+      return makeRegisterDestinationAddDiffs(state, instruction.op1, instruction.op2);
+
+    case 'subRegisterMemoryAndRegisterToEither': {
+      const dest = instruction.op1;
+      const source = instruction.op2;
+
+      if (dest.kind === 'reg' && source.kind === 'reg') {
+        const sourceValue = getRegisterValue(state, source);
+
+        return makeRegisterDestinationSubDiffs(state, dest, sourceValue);
+      } else {
+        return [];
+      }
+    }
+
+    case 'subImmediateFromAccumulator':
+      return makeRegisterDestinationSubDiffs(state, instruction.op1, instruction.op2);
+
+    case 'cmpRegisterMemoryAndRegister': {
+      const dest = instruction.op1;
+      const source = instruction.op2;
+
+      if (dest.kind === 'reg' && source.kind === 'reg') {
+        const sourceValue = getRegisterValue(state, source);
+
+        return makeRegisterDestinationCmpDiffs(state, dest, sourceValue);
+      } else {
+        return [];
+      }
+    }
+
+    case 'cmpImmediateWithAccumulator':
+      return makeRegisterDestinationCmpDiffs(state, instruction.op1, instruction.op2);
+
+    case 'addImmediateToRegisterMemory': {
+      const dest = instruction.op1;
+
+      if (dest.kind === 'reg') {
+        return makeRegisterDestinationAddDiffs(
+          state,
+          dest,
+          sanitize8BitSignExtendedNegatives(instruction.op2),
+        );
+      } else {
+        return [];
+      }
+    }
+
+    case 'subImmediateToRegisterMemory': {
+      const dest = instruction.op1;
+
+      if (dest.kind === 'reg') {
+        return makeRegisterDestinationSubDiffs(
+          state,
+          dest,
+          sanitize8BitSignExtendedNegatives(instruction.op2),
+        );
+      } else {
+        return [];
+      }
+    }
+
+    case 'cmpImmediateToRegisterMemory': {
+      const dest = instruction.op1;
+
+      if (dest.kind === 'reg') {
+        return makeRegisterDestinationCmpDiffs(
+          state,
+          dest,
+          sanitize8BitSignExtendedNegatives(instruction.op2),
+        );
+      } else {
+        return [];
+      }
+    }
+
     case 'movRegisterMemoryToFromRegister': {
       const dest = instruction.op1;
       const source = instruction.op2;
 
       if (dest.kind === 'reg' && source.kind === 'reg') {
-        const sourceValue = getRegisterValue(source, state);
+        const sourceValue = getRegisterValue(state, source);
 
-        return simulateMovValueToRegisterDiff(state, dest, sourceValue);
+        return [makeSetRegisterValueDiff(state, dest, sourceValue)];
       } else {
         return [];
       }
@@ -75,7 +175,7 @@ function simulateInstructionDiff(
       const sourceValue = state[instruction.op2];
 
       if (dest.kind === 'reg') {
-        return simulateMovValueToRegisterDiff(state, dest, sourceValue);
+        return [makeSetRegisterValueDiff(state, dest, sourceValue)];
       } else {
         return [];
       }
@@ -85,7 +185,7 @@ function simulateInstructionDiff(
       const source = instruction.op2;
 
       if (source.kind === 'reg') {
-        const sourceValue = getRegisterValue(source, state);
+        const sourceValue = getRegisterValue(state, source);
 
         return [
           {
@@ -100,12 +200,12 @@ function simulateInstructionDiff(
     }
 
     case 'movImmediateToRegister':
-      return simulateMovValueToRegisterDiff(state, instruction.op1, instruction.op2);
+      return [makeSetRegisterValueDiff(state, instruction.op1, instruction.op2)];
 
     case 'movImmediateToRegisterMemory': {
       const dest = instruction.op1;
       if (dest.kind === 'reg') {
-        return simulateMovValueToRegisterDiff(state, dest, instruction.op2);
+        return [makeSetRegisterValueDiff(state, dest, instruction.op2)];
       } else {
         return [];
       }
@@ -116,7 +216,117 @@ function simulateInstructionDiff(
   }
 }
 
-function getRegisterValue(register: Register, state: Readonly<SimulationState>): number {
+function makeRegisterDestinationAddDiffs(
+  state: Readonly<SimulationState>,
+  destRegister: Register,
+  sourceValue: number,
+): SimulationStateDiff {
+  const destValue = getRegisterValue(state, destRegister);
+
+  const auxCarry = (destValue & 0b1111) + (sourceValue & 0b1111) > 0b1111;
+
+  let result = destValue + sourceValue;
+
+  const max = isWordRegister(destRegister) ? 65536 : 128;
+
+  let overflow = false;
+  let carry = false;
+  let sign = false;
+
+  if (result >= max) {
+    carry = true;
+  }
+
+  result = result % max;
+
+  const destSignBit = destValue >= max / 2;
+  const sourceSignBit = sourceValue >= max / 2;
+  const resultSignBit = result >= max / 2;
+
+  if (destSignBit !== resultSignBit && destSignBit === sourceSignBit) {
+    overflow = true;
+  }
+
+  if ((result & (max / 2)) !== 0) {
+    sign = true;
+  }
+
+  return [
+    makeSetRegisterValueDiff(state, destRegister, result),
+    ...makeFlagDiffsForArithmeticOp(state, result, overflow, sign, auxCarry, carry),
+  ];
+}
+
+function makeRegisterDestinationSubDiffs(
+  state: Readonly<SimulationState>,
+  destRegister: Register,
+  sourceValue: number,
+): SimulationStateDiff {
+  const { result, flagDiffs } = makeRegisterDesintationSubOrCmpResults(
+    state,
+    destRegister,
+    sourceValue,
+  );
+
+  return [makeSetRegisterValueDiff(state, destRegister, result), ...flagDiffs];
+}
+
+function makeRegisterDestinationCmpDiffs(
+  state: Readonly<SimulationState>,
+  destRegister: Register,
+  sourceValue: number,
+): SimulationStateDiff {
+  const { flagDiffs } = makeRegisterDesintationSubOrCmpResults(state, destRegister, sourceValue);
+
+  return [...flagDiffs];
+}
+
+function makeRegisterDesintationSubOrCmpResults(
+  state: Readonly<SimulationState>,
+  destRegister: Register,
+  sourceValue: number,
+): {
+  readonly result: number;
+  readonly flagDiffs: Generator<SimulationStatePropertyDiff>;
+} {
+  const destValue = getRegisterValue(state, destRegister);
+
+  const auxCarry = (destValue & 0b1111) < (sourceValue & 0b1111);
+
+  let result = destValue - sourceValue;
+
+  const max = isWordRegister(destRegister) ? 65536 : 128;
+
+  let carry = false;
+  let overflow = false;
+  let sign = false;
+
+  if (result < 0) {
+    carry = true;
+  }
+
+  result = result % max;
+
+  const destSignBit = destValue >= max / 2;
+  const sourceSignBit = sourceValue >= max / 2;
+  const resultSignBit = result >= max / 2;
+
+  // https://en.wikipedia.org/wiki/Overflow_flag
+  if (resultSignBit !== destSignBit && sourceSignBit !== destSignBit) {
+    overflow = true;
+  }
+
+  if ((result & (max / 2)) !== 0) {
+    sign = true;
+  }
+
+  return {
+    result,
+    flagDiffs: makeFlagDiffsForArithmeticOp(state, result, overflow, sign, auxCarry, carry),
+  };
+}
+
+function getRegisterValue(state: Readonly<SimulationState>, register: Register): number {
   if (isWordRegister(register)) {
     return state[register.name];
   } else {
@@ -130,11 +340,11 @@ function getRegisterValue(register: Register, state: Readonly<SimulationState>):
   }
 }
 
-function simulateMovValueToRegisterDiff(
+function makeSetRegisterValueDiff(
   state: Readonly<SimulationState>,
   register: Register,
   value: number,
-): SimulationStateDiff {
+): SimulationStatePropertyDiff {
   let mainRegister: WordRegisterName;
   let newValue: number;
 
@@ -151,13 +361,62 @@ function simulateMovValueToRegisterDiff(
     }
   }
 
-  return [
-    {
-      key: mainRegister,
-      from: state[mainRegister],
-      to: newValue,
-    },
-  ];
+  return {
+    key: mainRegister,
+    from: state[mainRegister],
+    to: newValue,
+  };
+}
+
+function* makeFlagDiffsForArithmeticOp(
+  state: Readonly<SimulationState>,
+  result: number,
+  overflow: boolean,
+  sign: boolean,
+  auxCarry: boolean,
+  carry: boolean,
+): Generator<SimulationStatePropertyDiff> {
+  yield {
+    key: 'overflowFlag',
+    from: state.overflowFlag,
+    to: overflow,
+  };
+
+  yield {
+    key: 'signFlag',
+    from: state.signFlag,
+    to: sign,
+  };
+
+  yield {
+    key: 'zeroFlag',
+    from: state.zeroFlag,
+    to: result === 0,
+  };
+
+  yield {
+    key: 'auxCarryFlag',
+    from: state.auxCarryFlag,
+    to: auxCarry,
+  };
+
+  // https://medium.com/free-code-camp/algorithmic-problem-solving-efficiently-computing-the-parity-of-a-stream-of-numbers-cd652af14643
+  let parityCheckResult = result & 0xff;
+  parityCheckResult ^= parityCheckResult >> 4;
+  parityCheckResult ^= parityCheckResult >> 2;
+  parityCheckResult ^= parityCheckResult >> 1;
+
+  yield {
+    key: 'parityFlag',
+    from: state.parityFlag,
+    to: !(parityCheckResult & 1),
+  };
+
+  yield {
+    key: 'carryFlag',
+    from: state.carryFlag,
+    to: carry,
+  };
 }
 
 function applyDiff(state: SimulationState, diff: SimulationStateDiff): void {
@@ -165,5 +424,16 @@ function applyDiff(state: SimulationState, diff: SimulationStateDiff): void {
     // @ts-expect-error the type of SimulationStatePropertyDiff guarantees that we've got the correct
     // relationship between the key and the type of to (or from), but TS doesn't understand that relationship
     state[propertyDiff.key] = propertyDiff.to;
+  }
+}
+
+/**
+ * Handle any 8-bit sign extended negative values so that the carry flag works correctly!
+ */
+function sanitize8BitSignExtendedNegatives(value: number): number {
+  if (value < 0) {
+    return 65536 + value;
+  } else {
+    return value;
   }
 }
