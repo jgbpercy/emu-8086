@@ -334,7 +334,7 @@ export function encodeBitAnnotationsWithoutLockOrRep(
       };
 
       const modRegRmDisplacementAnnotations = encodeModRegRmDisplacementForMemoryMod(
-        registerEncodingTable[instruction.op1.register],
+        registerEncodingTable[instruction.op1.name],
         instruction.op2,
       );
 
@@ -365,7 +365,7 @@ export function encodeBitAnnotationsWithoutLockOrRep(
         },
         {
           category: 'reg',
-          value: registerEncodingTable[instruction.op2.register].regBits,
+          value: registerEncodingTable[instruction.op2.name].regBits,
           length: 3,
           isByteEnd: true,
         },
@@ -451,7 +451,7 @@ export function encodeBitAnnotationsWithoutLockOrRep(
       ];
 
     case 'testImmediateWithAccumulator': {
-      const word = instruction.op1.register === 'ax';
+      const word = instruction.op1.name === 'ax';
       return [
         {
           category: 'opCode',
@@ -518,7 +518,7 @@ export function encodeBitAnnotationsWithoutLockOrRep(
       ];
 
     case 'movImmediateToRegister': {
-      const regData = registerEncodingTable[instruction.op1.register];
+      const regData = registerEncodingTable[instruction.op1.name];
 
       return [
         {
@@ -573,7 +573,7 @@ export function encodeBitAnnotationsWithoutLockOrRep(
       };
 
       const modRegRmDisplacementAnnotations = encodeModRegRmDisplacementForMemoryMod(
-        registerEncodingTable[instruction.op1.register],
+        registerEncodingTable[instruction.op1.name],
         instruction.op2,
       );
 
@@ -597,7 +597,7 @@ export function encodeBitAnnotationsWithoutLockOrRep(
       };
 
       const modRegRmDisplacementAnnotations = encodeModRegRmDisplacementForMemoryMod(
-        registerEncodingTable[instruction.op1.register],
+        registerEncodingTable[instruction.op1.name],
         instruction.op2,
       );
 
@@ -628,7 +628,7 @@ export function encodeBitAnnotationsWithoutLockOrRep(
       };
 
       if (instruction.op1.kind === 'reg') {
-        const regData = registerEncodingTable[instruction.op1.register];
+        const regData = registerEncodingTable[instruction.op1.name];
 
         return [
           opCodePart1Annotation,
@@ -796,7 +796,7 @@ export function encodeBitAnnotationsWithoutLockOrRep(
       };
 
       if (instruction.op2.kind === 'reg') {
-        const regData = registerEncodingTable[instruction.op2.register];
+        const regData = registerEncodingTable[instruction.op2.name];
 
         return [
           opCodeAnnotation,
@@ -914,7 +914,7 @@ export function encodeBitAnnotationsWithoutLockOrRep(
       };
 
       if (instruction.op1.kind === 'reg') {
-        const regData = registerEncodingTable[instruction.op1.register];
+        const regData = registerEncodingTable[instruction.op1.name];
 
         return [
           opCodePart1Annotation,
@@ -1053,7 +1053,7 @@ function encodeModRmNoWbitInstruction(
   };
 
   if (instruction.op1.kind === 'reg') {
-    const regData = registerEncodingTable[instruction.op1.register];
+    const regData = registerEncodingTable[instruction.op1.name];
 
     return [
       opCodePart1Annotation,
@@ -1108,7 +1108,7 @@ function encodeSingleOperandMathInstruction(
   };
 
   if (instruction.op1.kind === 'reg') {
-    const regData = registerEncodingTable[instruction.op1.register];
+    const regData = registerEncodingTable[instruction.op1.name];
 
     return [
       opCodePart1Annotation,
@@ -1187,7 +1187,7 @@ function encodeInOutVariablePort(
     },
     {
       category: 'wBit',
-      value: reg.register === 'al' ? 0 : 1,
+      value: reg.name === 'al' ? 0 : 1,
       length: 1,
       isByteEnd: true,
     },
@@ -1208,7 +1208,7 @@ function encodeInOutFixedPort(
     },
     {
       category: 'wBit',
-      value: reg.register === 'al' ? 0 : 1,
+      value: reg.name === 'al' ? 0 : 1,
       length: 1,
       isByteEnd: true,
     },
@@ -1250,7 +1250,7 @@ function encodeStandardLogicWithOneOrClInstruction(
   };
 
   if (instruction.op1.kind === 'reg') {
-    const regData = registerEncodingTable[instruction.op1.register];
+    const regData = registerEncodingTable[instruction.op1.name];
 
     return [
       opCodePart1Annotation,
@@ -1397,8 +1397,8 @@ function encodeWbitModRegRmForMod11(
   regField: Register,
   rmField: Register,
 ): ReadonlyArray<AnnotatedBits> {
-  const regRegisterData = registerEncodingTable[regField.register];
-  const rmRegisterData = registerEncodingTable[rmField.register];
+  const regRegisterData = registerEncodingTable[regField.name];
+  const rmRegisterData = registerEncodingTable[rmField.name];
 
   return [
     {
@@ -1427,7 +1427,7 @@ function encodeWbitModRegRmForMemoryMod(
   registerOperand: Register,
   memoryOperand: EffectiveAddressCalculation,
 ): ReadonlyArray<AnnotatedBits> {
-  const regData = registerEncodingTable[registerOperand.register];
+  const regData = registerEncodingTable[registerOperand.name];
 
   const wBitAnnotation: AnnotatedBits = {
     category: 'wBit',
@@ -1519,7 +1519,7 @@ function encodeStandardArithmeticLogicImmediateToRegisterMemoryInstruction(
   };
 
   if (instruction.op1.kind === 'reg') {
-    const regData = registerEncodingTable[instruction.op1.register];
+    const regData = registerEncodingTable[instruction.op1.name];
 
     const sBit = regData.word && instruction.op2 >= -128 && instruction.op2 <= 127 ? 1 : 0;
 
@@ -1617,7 +1617,7 @@ function encodeSegmentRegisterMovInstruction(
   };
 
   if (registerOrEac.kind === 'reg') {
-    const regData = registerEncodingTable[registerOrEac.register];
+    const regData = registerEncodingTable[registerOrEac.name];
 
     return [
       opCodePart1Annotation,
@@ -1666,7 +1666,7 @@ function encodeMovMemoryToFromAccumulatorInstruction(
     },
     {
       category: 'wBit',
-      value: register.register === 'al' ? 0 : 1,
+      value: register.name === 'al' ? 0 : 1,
       length: 1,
       isByteEnd: true,
     },
@@ -1743,7 +1743,7 @@ function encodeWbitImmediateDataToAccumulatorInstruction(
     readonly op2: number;
   },
 ): ReadonlyArray<AnnotatedBits> {
-  const word = instruction.op1.register === 'ax';
+  const word = instruction.op1.name === 'ax';
 
   return [
     {
@@ -1786,7 +1786,7 @@ function encodeDirectOnWordRegisterInstruction(
     },
     {
       category: 'reg',
-      value: registerEncodingTable[instruction.op1.register].regBits,
+      value: registerEncodingTable[instruction.op1.name].regBits,
       length: 3,
       isByteEnd: true,
     },

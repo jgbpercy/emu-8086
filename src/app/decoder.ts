@@ -2150,7 +2150,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       const [reg, destRm] = decodeModRegRm(context, wBit);
 
-      if (reg.register !== 'al' && reg.register !== 'ax') {
+      if (reg.name !== 'al' && reg.name !== 'ax') {
         throw new Error(
           'Encounted immediate move to register memory with non-000 reg in mod reg r/m byte. See table 4-13 C6/C7',
         );

@@ -365,7 +365,7 @@ function printOperand(operand: Operand, settings: Required<PrinterSettings>): st
   } else if (typeof operand === 'number') {
     return operand.toString();
   } else if (operand.kind === 'reg') {
-    return settings.registerCaps ? operand.register.toUpperCase() : operand.register;
+    return settings.registerCaps ? operand.name.toUpperCase() : operand.name;
   } else {
     let lengthPrefixString: string;
 

@@ -26,10 +26,16 @@ export class AppComponent {
     bx: 0,
     cx: 0,
     dx: 0,
+
     bp: 0,
     sp: 0,
     si: 0,
     di: 0,
+
+    cs: 0,
+    ds: 0,
+    es: 0,
+    ss: 0,
   };
 
   gotFile(evt: Event): void {

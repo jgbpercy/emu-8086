@@ -18,25 +18,25 @@ export type RegisterName =
 
 export interface Register {
   kind: 'reg';
-  register: RegisterName;
+  name: RegisterName;
 }
 
-export const alReg = { kind: 'reg', register: 'al' } as const;
-export const axReg = { kind: 'reg', register: 'ax' } as const;
-export const clReg = { kind: 'reg', register: 'cl' } as const;
-export const cxReg = { kind: 'reg', register: 'cx' } as const;
-export const dlReg = { kind: 'reg', register: 'dl' } as const;
-export const dxReg = { kind: 'reg', register: 'dx' } as const;
-export const blReg = { kind: 'reg', register: 'bl' } as const;
-export const bxReg = { kind: 'reg', register: 'bx' } as const;
-export const ahReg = { kind: 'reg', register: 'ah' } as const;
-export const spReg = { kind: 'reg', register: 'sp' } as const;
-export const chReg = { kind: 'reg', register: 'ch' } as const;
-export const bpReg = { kind: 'reg', register: 'bp' } as const;
-export const dhReg = { kind: 'reg', register: 'dh' } as const;
-export const siReg = { kind: 'reg', register: 'si' } as const;
-export const bhReg = { kind: 'reg', register: 'bh' } as const;
-export const diReg = { kind: 'reg', register: 'di' } as const;
+export const alReg = { kind: 'reg', name: 'al' } as const;
+export const axReg = { kind: 'reg', name: 'ax' } as const;
+export const clReg = { kind: 'reg', name: 'cl' } as const;
+export const cxReg = { kind: 'reg', name: 'cx' } as const;
+export const dlReg = { kind: 'reg', name: 'dl' } as const;
+export const dxReg = { kind: 'reg', name: 'dx' } as const;
+export const blReg = { kind: 'reg', name: 'bl' } as const;
+export const bxReg = { kind: 'reg', name: 'bx' } as const;
+export const ahReg = { kind: 'reg', name: 'ah' } as const;
+export const spReg = { kind: 'reg', name: 'sp' } as const;
+export const chReg = { kind: 'reg', name: 'ch' } as const;
+export const bpReg = { kind: 'reg', name: 'bp' } as const;
+export const dhReg = { kind: 'reg', name: 'dh' } as const;
+export const siReg = { kind: 'reg', name: 'si' } as const;
+export const bhReg = { kind: 'reg', name: 'bh' } as const;
+export const diReg = { kind: 'reg', name: 'di' } as const;
 
 export type WordRegister =
   | typeof axReg
@@ -48,7 +48,7 @@ export type WordRegister =
   | typeof siReg
   | typeof diReg;
 
-export type WordRegisterName = WordRegister['register'];
+export type WordRegisterName = WordRegister['name'];
 
 export type AccumulatorRegister = typeof alReg | typeof axReg;
 
@@ -136,7 +136,7 @@ const _regEncodingTable: Record<string, RegisterEncodingData> = Object.fromEntri
       regBits,
     };
 
-    return [reg.register, data];
+    return [reg.name, data];
   }),
 );
 
@@ -154,14 +154,14 @@ export const segmentRegisterEncodingTable = _segRegEncodingTable as Readonly<
 
 export function isWordRegister(register: Register): register is WordRegister {
   return (
-    register.register === 'ax' ||
-    register.register === 'bx' ||
-    register.register === 'cx' ||
-    register.register === 'dx' ||
-    register.register === 'sp' ||
-    register.register === 'bp' ||
-    register.register === 'si' ||
-    register.register === 'di'
+    register.name === 'ax' ||
+    register.name === 'bx' ||
+    register.name === 'cx' ||
+    register.name === 'dx' ||
+    register.name === 'sp' ||
+    register.name === 'bp' ||
+    register.name === 'si' ||
+    register.name === 'di'
   );
 }
 
@@ -186,9 +186,9 @@ export const mainRegisterTable: Readonly<Record<RegisterName, WordRegisterName>>
 
 export function isHigh8BitRegister(register: Register): boolean {
   return (
-    register.register === 'ah' ||
-    register.register === 'bh' ||
-    register.register === 'ch' ||
-    register.register === 'dh'
+    register.name === 'ah' ||
+    register.name === 'bh' ||
+    register.name === 'ch' ||
+    register.name === 'dh'
   );
 }

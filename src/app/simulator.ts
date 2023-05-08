@@ -12,10 +12,16 @@ export interface SimulationState {
   bx: number;
   cx: number;
   dx: number;
+
   sp: number;
   bp: number;
   si: number;
   di: number;
+
+  cs: number;
+  ds: number;
+  es: number;
+  ss: number;
 }
 
 type KeyOfType<TObject, TValue> = {
@@ -50,37 +56,56 @@ function simulateInstructionDiff(
   instruction: DecodedInstruction,
 ): Readonly<SimulationStateDiff> {
   switch (instruction.kind) {
-    case 'movImmediateToRegister':
-      return simulateMovImmediateToRegisterDiff(state, instruction.op1, instruction.op2);
-
-    case 'movImmediateToRegisterMemory': {
-      const dest = instruction.op1;
-      if (dest.kind === 'reg') {
-        return simulateMovImmediateToRegisterDiff(state, dest, instruction.op2);
-      } else {
-        return [];
-      }
-    }
-
     case 'movRegisterMemoryToFromRegister': {
       const dest = instruction.op1;
       const source = instruction.op2;
 
       if (dest.kind === 'reg' && source.kind === 'reg') {
-        let sourceValue: number;
-        if (isWordRegister(source)) {
-          sourceValue = state[source.register];
-        } else {
-          const mainRegister = mainRegisterTable[source.register];
+        const sourceValue = getRegisterValue(source, state);
 
-          if (isHigh8BitRegister(source)) {
-            sourceValue = state[mainRegister] & 0xff00;
-          } else {
-            sourceValue = state[mainRegister] & 0x00ff;
-          }
-        }
+        return simulateMovValueToRegisterDiff(state, dest, sourceValue);
+      } else {
+        return [];
+      }
+    }
 
-        return simulateMovImmediateToRegisterDiff(state, dest, sourceValue);
+    case 'movSegmentRegisterToRegisterMemory': {
+      const dest = instruction.op1;
+
+      const sourceValue = state[instruction.op2];
+
+      if (dest.kind === 'reg') {
+        return simulateMovValueToRegisterDiff(state, dest, sourceValue);
+      } else {
+        return [];
+      }
+    }
+
+    case 'movRegisterMemoryToSegmentRegister': {
+      const source = instruction.op2;
+
+      if (source.kind === 'reg') {
+        const sourceValue = getRegisterValue(source, state);
+
+        return [
+          {
+            key: instruction.op1,
+            from: state[instruction.op1],
+            to: sourceValue,
+          },
+        ];
+      } else {
+        return [];
+      }
+    }
+
+    case 'movImmediateToRegister':
+      return simulateMovValueToRegisterDiff(state, instruction.op1, instruction.op2);
+
+    case 'movImmediateToRegisterMemory': {
+      const dest = instruction.op1;
+      if (dest.kind === 'reg') {
+        return simulateMovValueToRegisterDiff(state, dest, instruction.op2);
       } else {
         return [];
       }
@@ -91,7 +116,21 @@ function simulateInstructionDiff(
   }
 }
 
-function simulateMovImmediateToRegisterDiff(
+function getRegisterValue(register: Register, state: Readonly<SimulationState>): number {
+  if (isWordRegister(register)) {
+    return state[register.name];
+  } else {
+    const mainRegister = mainRegisterTable[register.name];
+
+    if (isHigh8BitRegister(register)) {
+      return (state[mainRegister] & 0xff00) >> 8;
+    } else {
+      return state[mainRegister] & 0x00ff;
+    }
+  }
+}
+
+function simulateMovValueToRegisterDiff(
   state: Readonly<SimulationState>,
   register: Register,
   value: number,
@@ -100,10 +139,10 @@ function simulateMovImmediateToRegisterDiff(
   let newValue: number;
 
   if (isWordRegister(register)) {
-    mainRegister = register.register;
+    mainRegister = register.name;
     newValue = value;
   } else {
-    mainRegister = mainRegisterTable[register.register];
+    mainRegister = mainRegisterTable[register.name];
 
     if (isHigh8BitRegister(register)) {
       newValue = (state[mainRegister] & 0x00ff) + (value << 8);

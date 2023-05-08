@@ -41,6 +41,7 @@
           simulationState.dx.toString(10)
         }})
       </div>
+      <div>--------</div>
       <div>
         sp: 0x{{ simulationState.sp.toString(16).padStart(4, '0') }} ({{
           simulationState.sp.toString(10)
@@ -59,6 +60,27 @@
       <div>
         di: 0x{{ simulationState.di.toString(16).padStart(4, '0') }} ({{
           simulationState.di.toString(10)
+        }})
+      </div>
+      <div>--------</div>
+      <div>
+        cs: 0x{{ simulationState.cs.toString(16).padStart(4, '0') }} ({{
+          simulationState.sp.toString(10)
+        }})
+      </div>
+      <div>
+        ds: 0x{{ simulationState.ds.toString(16).padStart(4, '0') }} ({{
+          simulationState.bp.toString(10)
+        }})
+      </div>
+      <div>
+        es: 0x{{ simulationState.es.toString(16).padStart(4, '0') }} ({{
+          simulationState.si.toString(10)
+        }})
+      </div>
+      <div>
+        ss: 0x{{ simulationState.ss.toString(16).padStart(4, '0') }} ({{
+          simulationState.es.toString(10)
         }})
       </div>
     </div>
