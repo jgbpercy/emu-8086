@@ -8,12 +8,60 @@
     <button (click)="fileInput.click()">Upload File</button>
   </div>
 
-  <div *ngIf="annotatedInstructions" class="annotated-instructions">
-    <annotated-instruction
-      *ngFor="let annotatedInstruction of annotatedInstructions"
-      [annotatedInstruction]="annotatedInstruction"
-    >
-    </annotated-instruction>
+  <div *ngIf="annotatedInstructions" class="output">
+    <div class="annotated-instructions">
+      <annotated-instruction
+        *ngFor="let annotatedInstruction of annotatedInstructions"
+        [annotatedInstruction]="annotatedInstruction"
+        [simulationStateDiff]="annotatedInstruction.simulationStateDiff"
+      >
+      </annotated-instruction>
+    </div>
+
+    <div class="simulation-state">
+      <h3>CPU State</h3>
+
+      <div>
+        ax: 0x{{ simulationState.ax.toString(16).padStart(4, '0') }} ({{
+          simulationState.ax.toString(10)
+        }})
+      </div>
+      <div>
+        bx: 0x{{ simulationState.bx.toString(16).padStart(4, '0') }} ({{
+          simulationState.bx.toString(10)
+        }})
+      </div>
+      <div>
+        cx: 0x{{ simulationState.cx.toString(16).padStart(4, '0') }} ({{
+          simulationState.cx.toString(10)
+        }})
+      </div>
+      <div>
+        dx: 0x{{ simulationState.dx.toString(16).padStart(4, '0') }} ({{
+          simulationState.dx.toString(10)
+        }})
+      </div>
+      <div>
+        sp: 0x{{ simulationState.sp.toString(16).padStart(4, '0') }} ({{
+          simulationState.sp.toString(10)
+        }})
+      </div>
+      <div>
+        bp: 0x{{ simulationState.bp.toString(16).padStart(4, '0') }} ({{
+          simulationState.bp.toString(10)
+        }})
+      </div>
+      <div>
+        si: 0x{{ simulationState.si.toString(16).padStart(4, '0') }} ({{
+          simulationState.si.toString(10)
+        }})
+      </div>
+      <div>
+        di: 0x{{ simulationState.di.toString(16).padStart(4, '0') }} ({{
+          simulationState.di.toString(10)
+        }})
+      </div>
+    </div>
   </div>
 
   <!-- <button *ngIf="instructionString" type="button" (click)="download()">Download</button> -->

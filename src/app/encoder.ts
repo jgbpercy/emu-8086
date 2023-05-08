@@ -1035,7 +1035,7 @@ function encodeModRmNoWbitInstruction(
   opCodePart1: 0b1111_1111 | 0b1000_1111,
   opCodePart2: number,
   instruction: {
-    op1: RegisterOrEac;
+    readonly op1: RegisterOrEac;
   },
 ): ReadonlyArray<AnnotatedBits> {
   const opCodePart1Annotation: AnnotatedBits = {
@@ -1090,7 +1090,7 @@ function encodeSingleOperandMathInstruction(
   opCodePart1: 0b1111_011 | 0b1111_111,
   opCodePart2: number,
   instruction: {
-    op1: RegisterOrEac;
+    readonly op1: RegisterOrEac;
   },
 ): ReadonlyArray<AnnotatedBits> {
   const opCodePart1Annotation: AnnotatedBits = {
@@ -1160,7 +1160,7 @@ function encodeSingleOperandMathInstruction(
 function encodeCallJumpDirectWithinSegment(
   opCode: number,
   instruction: {
-    op1: number;
+    readonly op1: number;
   },
 ): ReadonlyArray<AnnotatedBits> {
   return [
@@ -1224,8 +1224,8 @@ function encodeInOutFixedPort(
 function encodeStandardLogicWithOneOrClInstruction(
   opCodePart2: number,
   instruction: {
-    op1: RegisterOrEac;
-    op2: 1 | typeof clReg;
+    readonly op1: RegisterOrEac;
+    readonly op2: 1 | typeof clReg;
   },
 ): ReadonlyArray<AnnotatedBits> {
   const opCodePart1Annotation: AnnotatedBits = {
@@ -1304,8 +1304,8 @@ function encodeStandardLogicWithOneOrClInstruction(
 function encodeModRegRmInstructionWithVariableDest(
   opCode: number,
   instruction: {
-    op1: RegisterOrEac;
-    op2: RegisterOrEac;
+    readonly op1: RegisterOrEac;
+    readonly op2: RegisterOrEac;
   },
 ): ReadonlyArray<AnnotatedBits> {
   const opCodeAnnotation: AnnotatedBits = {
@@ -1356,8 +1356,8 @@ function encodeModRegRmInstructionWithVariableDest(
 function encodeModRegRmInstructionWithFixedDest(
   opCode: number,
   instruction: {
-    op1: RegisterOrEac;
-    op2: RegisterOrEac;
+    readonly op1: RegisterOrEac;
+    readonly op2: RegisterOrEac;
   },
   // Hack to match nasm, which seems to put the dest in reg for test but not xchg?
   // Or I got something wrong elsewhere
@@ -1439,7 +1439,10 @@ function encodeWbitModRegRmForMemoryMod(
   return [wBitAnnotation, ...encodeModRegRmDisplacementForMemoryMod(regData, memoryOperand)];
 }
 
-function getRegisterMemoryOperands(instruction: { op1: RegisterOrEac; op2: RegisterOrEac }): {
+function getRegisterMemoryOperands(instruction: {
+  readonly op1: RegisterOrEac;
+  readonly op2: RegisterOrEac;
+}): {
   registerOperand: Register;
   memoryOperand: EffectiveAddressCalculation;
 } {
@@ -1497,8 +1500,8 @@ function encodeSegmentOverridePrefix(
 function encodeStandardArithmeticLogicImmediateToRegisterMemoryInstruction(
   opCodePart2: number,
   instruction: {
-    op1: RegisterOrEac;
-    op2: number;
+    readonly op1: RegisterOrEac;
+    readonly op2: number;
   },
 ): ReadonlyArray<AnnotatedBits> {
   const opCodePart1Annotation: AnnotatedBits = {
@@ -1736,8 +1739,8 @@ function encodeModRmDisplacementForMemoryOperand(op: EffectiveAddressCalculation
 function encodeWbitImmediateDataToAccumulatorInstruction(
   opCode: number,
   instruction: {
-    op1: AccumulatorRegister;
-    op2: number;
+    readonly op1: AccumulatorRegister;
+    readonly op2: number;
   },
 ): ReadonlyArray<AnnotatedBits> {
   const word = instruction.op1.register === 'ax';
@@ -1771,7 +1774,7 @@ function encodeSegmentRegister(segmentRegister: SegmentRegister): AnnotatedBits 
 function encodeDirectOnWordRegisterInstruction(
   opCode: number,
   instruction: {
-    op1: WordRegister;
+    readonly op1: WordRegister;
   },
 ): ReadonlyArray<AnnotatedBits> {
   return [
@@ -1793,7 +1796,7 @@ function encodeDirectOnWordRegisterInstruction(
 function encodeShortLabelJumpInstruction(
   opCode: number,
   instruction: {
-    op1: number;
+    readonly op1: number;
   },
 ): ReadonlyArray<AnnotatedBits> {
   return [

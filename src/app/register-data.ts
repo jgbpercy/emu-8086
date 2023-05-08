@@ -48,6 +48,8 @@ export type WordRegister =
   | typeof siReg
   | typeof diReg;
 
+export type WordRegisterName = WordRegister['register'];
+
 export type AccumulatorRegister = typeof alReg | typeof axReg;
 
 export type SegmentRegister = 'es' | 'cs' | 'ss' | 'ds';
@@ -149,3 +151,44 @@ const _segRegEncodingTable: Record<string, number> = Object.fromEntries(
 export const segmentRegisterEncodingTable = _segRegEncodingTable as Readonly<
   Record<SegmentRegister, number>
 >;
+
+export function isWordRegister(register: Register): register is WordRegister {
+  return (
+    register.register === 'ax' ||
+    register.register === 'bx' ||
+    register.register === 'cx' ||
+    register.register === 'dx' ||
+    register.register === 'sp' ||
+    register.register === 'bp' ||
+    register.register === 'si' ||
+    register.register === 'di'
+  );
+}
+
+export const mainRegisterTable: Readonly<Record<RegisterName, WordRegisterName>> = {
+  ax: 'ax',
+  bx: 'bx',
+  cx: 'cx',
+  dx: 'dx',
+  ah: 'ax',
+  bh: 'bx',
+  ch: 'cx',
+  dh: 'dx',
+  al: 'ax',
+  bl: 'bx',
+  cl: 'cx',
+  dl: 'dx',
+  bp: 'bp',
+  sp: 'sp',
+  si: 'si',
+  di: 'di',
+};
+
+export function isHigh8BitRegister(register: Register): boolean {
+  return (
+    register.register === 'ah' ||
+    register.register === 'bh' ||
+    register.register === 'ch' ||
+    register.register === 'dh'
+  );
+}

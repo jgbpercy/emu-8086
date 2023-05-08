@@ -7,6 +7,7 @@ import {
 import { decodeInstructions } from './decoder';
 import { encodeBitAnnotations } from './encoder';
 import { printDecodedInstruction } from './printer';
+import { SimulationState, SimulationStateDiff, simulateInstruction } from './simulator';
 
 @Component({
   selector: 'app-root',
@@ -16,7 +17,20 @@ import { printDecodedInstruction } from './printer';
   styleUrls: ['./app.component.scss'],
 })
 export class AppComponent {
-  annotatedInstructions?: ReadonlyArray<AnnotatedInstructionData>;
+  annotatedInstructions?: ReadonlyArray<
+    AnnotatedInstructionData & { simulationStateDiff: SimulationStateDiff }
+  >;
+
+  readonly simulationState: SimulationState = {
+    ax: 0,
+    bx: 0,
+    cx: 0,
+    dx: 0,
+    bp: 0,
+    sp: 0,
+    si: 0,
+    di: 0,
+  };
 
   gotFile(evt: Event): void {
     if (!(evt.target instanceof HTMLInputElement)) {
@@ -40,6 +54,7 @@ export class AppComponent {
             asm: printDecodedInstruction(instruction),
             instruction: instruction,
             annotatedBits,
+            simulationStateDiff: simulateInstruction(this.simulationState, instruction),
           };
         });
       }

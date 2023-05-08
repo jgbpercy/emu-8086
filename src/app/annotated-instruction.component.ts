@@ -1,8 +1,9 @@
 import { CommonModule } from '@angular/common';
-import { Component, Input } from '@angular/core';
+import { Component, HostBinding, Input, OnChanges } from '@angular/core';
 import { AnnotatedBitsComponent } from './annotated-bits.component';
 import { DecodedInstruction } from './decoder';
 import { AnnotatedBits } from './encoder';
+import { SimulationStateDiff } from './simulator';
 
 export interface AnnotatedInstructionData {
   readonly lineNumber: number;
@@ -18,6 +19,14 @@ export interface AnnotatedInstructionData {
   templateUrl: './annotated-instruction.component.html',
   styleUrls: ['./annotated-instruction.component.scss'],
 })
-export class AnnotatedInstructionComponent {
+export class AnnotatedInstructionComponent implements OnChanges {
   @Input() annotatedInstruction!: AnnotatedInstructionData;
+
+  @Input() simulationStateDiff?: SimulationStateDiff;
+
+  @HostBinding('class.odd') isOddLineNumber = false;
+
+  ngOnChanges(): void {
+    this.isOddLineNumber = this.annotatedInstruction.lineNumber % 2 === 1;
+  }
 }

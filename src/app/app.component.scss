@@ -18,6 +18,11 @@ h2 {
   font-style: italic;
 }
 
+h3 {
+  padding: 8px;
+  text-align: center;
+}
+
 .content {
   flex: 1 1 auto;
   overflow-y: auto;
@@ -52,8 +57,15 @@ button {
   }
 }
 
+.output {
+  display: flex;
+  flex-direction: row;
+}
+
 .annotated-instructions {
-  > *:not(:last-child) {
-    margin-bottom: 10px;
-  }
+  flex: 75%;
+}
+
+.simulation-state {
+  flex: 25%;
 }

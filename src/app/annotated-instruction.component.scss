@@ -1,10 +1,20 @@
+@use './sass/colors.scss';
+
 $line-number-width: 45px;
+$simulation-state-diff-width: 500px;
 $gap: 8px;
 
 :host {
   display: grid;
-  grid-template-columns: $line-number-width calc(100% - $line-number-width - $gap);
+  grid-template-columns:
+    $line-number-width calc(100% - $gap - $line-number-width - $gap - $simulation-state-diff-width)
+    $simulation-state-diff-width;
   gap: $gap;
+  padding: 5px 0;
+
+  &.odd {
+    background: colors.$background-highlight;
+  }
 }
 
 .line-number {
@@ -24,4 +34,10 @@ $gap: 8px;
   display: flex;
   flex-direction: row;
   margin-bottom: 4px;
+}
+
+.simulation-state-diff {
+  display: flex;
+  justify-content: start;
+  align-items: center;
 }
