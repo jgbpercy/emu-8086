@@ -1808,7 +1808,7 @@ function encodeShortLabelJumpInstruction(
     },
     {
       category: 'ipInc8',
-      value: instruction.op1,
+      value: toTwosComplementBits(instruction.op1),
       length: 8,
       isByteEnd: false,
     },
