@@ -345,6 +345,10 @@ function makeRegisterDesintationSubOrCmpResults(
 
   result = result % max;
 
+  if (result < 0) {
+    result += max;
+  }
+
   const destSignBit = destValue >= max / 2;
   const sourceSignBit = sourceValue >= max / 2;
   const resultSignBit = result >= max / 2;
