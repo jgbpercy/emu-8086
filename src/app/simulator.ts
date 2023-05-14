@@ -128,6 +128,72 @@ function simulateInstructionDiff(
         instruction.byteLength,
       );
 
+    case 'joJumpOnOverflow':
+      return makeShortLabelJumpDiff(state, instruction, state.overflowFlag);
+
+    case 'jnoJumpOnNotOverflow':
+      return makeShortLabelJumpDiff(state, instruction, !state.overflowFlag);
+
+    case 'jbJumpOnBelow':
+      return makeShortLabelJumpDiff(state, instruction, state.carryFlag);
+
+    case 'jnbJumpOnNotBelow':
+      return makeShortLabelJumpDiff(state, instruction, !state.carryFlag);
+
+    case 'jeJumpOnEqual':
+      return makeShortLabelJumpDiff(state, instruction, state.zeroFlag);
+
+    case 'jneJumpOnNotEqual':
+      return makeShortLabelJumpDiff(state, instruction, !state.zeroFlag);
+
+    case 'jnaJumpOnNotAbove':
+      return makeShortLabelJumpDiff(state, instruction, state.carryFlag || state.overflowFlag);
+
+    case 'jaJumpOnAbove':
+      return makeShortLabelJumpDiff(state, instruction, !(state.carryFlag || state.overflowFlag));
+
+    case 'jsJumpOnSign':
+      return makeShortLabelJumpDiff(state, instruction, state.signFlag);
+
+    case 'jnsJumpOnNotSign':
+      return makeShortLabelJumpDiff(state, instruction, !state.signFlag);
+
+    case 'jpJumpOnParity':
+      return makeShortLabelJumpDiff(state, instruction, state.parityFlag);
+
+    case 'jnpJumpOnNotParity':
+      return makeShortLabelJumpDiff(state, instruction, !state.parityFlag);
+
+    case 'jlJumpOnLess':
+      return makeShortLabelJumpDiff(
+        state,
+        instruction,
+        // XOR, technially
+        state.signFlag !== state.overflowFlag,
+      );
+
+    case 'jnlJumpOnNotLess':
+      return makeShortLabelJumpDiff(
+        state,
+        instruction,
+        // !XOR
+        state.signFlag === state.overflowFlag,
+      );
+
+    case 'jngJumpOnNotGreater':
+      return makeShortLabelJumpDiff(
+        state,
+        instruction,
+        state.overflowFlag !== state.signFlag || state.zeroFlag,
+      );
+
+    case 'jgJumpOnGreater':
+      return makeShortLabelJumpDiff(
+        state,
+        instruction,
+        !(state.overflowFlag !== state.signFlag || state.zeroFlag),
+      );
+
     case 'addImmediateToRegisterMemory': {
       const dest = instruction.op1;
 
@@ -241,9 +307,54 @@ function simulateInstructionDiff(
       }
     }
 
+    case 'loopneLoopWhileNotEqual':
+      return makeLoopDiff(state, instruction, state.cx - 1 !== 0 && !state.zeroFlag);
+
+    case 'loopeLoopWhileEqual':
+      return makeLoopDiff(state, instruction, state.cx - 1 !== 0 && state.zeroFlag);
+
+    case 'loopLoopCxTimes':
+      return makeLoopDiff(state, instruction, state.cx - 1 !== 0);
+
+    case 'jcxzJumpOnCxZero':
+      return state.cx === 0
+        ? [{ key: 'ip', from: state.ip, to: state.ip + instruction.byteLength + instruction.op1 }]
+        : [makeNextInstructionDiff(state, instruction.byteLength)];
+
     default:
       return [];
   }
+}
+
+function makeLoopDiff(
+  state: Readonly<SimulationState>,
+  instruction: { op1: number; byteLength: number },
+  condition: boolean,
+): SimulationStateDiff {
+  return [
+    condition
+      ? {
+          key: 'ip',
+          from: state.ip,
+          to: state.ip + instruction.byteLength + instruction.op1,
+        }
+      : makeNextInstructionDiff(state, instruction.byteLength),
+    {
+      key: 'cx',
+      from: state.cx,
+      to: state.cx - 1,
+    },
+  ];
+}
+
+function makeShortLabelJumpDiff(
+  state: Readonly<SimulationState>,
+  instruction: { op1: number; byteLength: number },
+  condition: boolean,
+): SimulationStateDiff {
+  return condition
+    ? [{ key: 'ip', from: state.ip, to: state.ip + instruction.byteLength + instruction.op1 }]
+    : [makeNextInstructionDiff(state, instruction.byteLength)];
 }
 
 function makeRegisterDestinationAddDiffs(
