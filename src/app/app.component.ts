@@ -4,18 +4,14 @@ import {
   AnnotatedInstructionComponent,
   AnnotatedInstructionData,
 } from './annotated-instruction.component';
+import { printDecodedInstruction } from './decoded-instruction-printer';
 import { decodeInstructions } from './decoder';
 import { encodeBitAnnotations } from './encoder';
 import { FlagPipe } from './flag.pipe';
 import { NumPipe } from './num.pipe';
-import { printDecodedInstruction } from './printer';
 import { SimulatedInstructionComponent } from './simulated-instruction.component';
-import { SimulationState, SimulationStateDiff, simulateInstruction } from './simulator';
-
-interface SimulatedInstruction {
-  readonly simulationStateDiff: SimulationStateDiff;
-  readonly asm: string;
-}
+import { SimulatedInstruction, caseyPrint } from './simulation-printer';
+import { SimulationState, simulateInstruction } from './simulator';
 
 @Component({
   selector: 'app-root',
@@ -34,6 +30,8 @@ export class AppComponent {
   annotatedInstructions?: ReadonlyArray<AnnotatedInstructionData>;
 
   simulatedInstructions?: ReadonlyArray<SimulatedInstruction>;
+
+  fileName?: string;
 
   readonly simulationState: SimulationState = {
     ax: 0,
@@ -142,7 +140,17 @@ export class AppComponent {
     });
 
     if (evt.target.files !== null) {
+      this.fileName = evt.target.files[0].name.split(/(\\|\/)/g).pop();
+
       reader.readAsArrayBuffer(evt.target.files[0]);
+    }
+  }
+
+  copyCaseyPrint(): void {
+    if (this.simulatedInstructions) {
+      navigator.clipboard.writeText(
+        caseyPrint(this.fileName ?? '', this.simulationState, this.simulatedInstructions),
+      );
     }
   }
 

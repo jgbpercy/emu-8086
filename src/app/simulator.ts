@@ -1,4 +1,5 @@
 import { DecodedInstruction } from './decoder';
+import { KeyOfType } from './key-of-type';
 import {
   Register,
   WordRegisterName,
@@ -35,10 +36,6 @@ export interface SimulationState {
   parityFlag: boolean;
   carryFlag: boolean;
 }
-
-type KeyOfType<TObject, TValue> = {
-  [K in keyof TObject]-?: TObject[K] extends TValue ? K : never;
-}[keyof TObject];
 
 export interface GenericSimulationStatePropertyDiff<T> {
   key: KeyOfType<SimulationState, T>;
