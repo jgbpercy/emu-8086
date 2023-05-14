@@ -1,9 +1,4 @@
-import {
-  DecodedInstruction,
-  DecodedInstructionWithByteIndex,
-  EffectiveAddressCalculation,
-  Operand,
-} from './decoder';
+import { DecodedInstruction, EffectiveAddressCalculation, Operand } from './decoder';
 import { printNum } from './num.pipe';
 
 const bitsDirective = 'bits 16';
@@ -34,49 +29,37 @@ const defaultSettings: Required<PrinterSettings> = {
 };
 
 export function printDecodedInstructions(
-  instructionsWithByteIndices: ReadonlyArray<DecodedInstructionWithByteIndex>,
+  decodedInstructions: ReadonlyMap<number, DecodedInstruction>,
   instructionBytes: Uint8Array,
   _settings?: PrinterSettings,
 ): string {
   const settings: Required<PrinterSettings> = { ...defaultSettings, ..._settings };
 
-  const strings = new Array<string>(instructionsWithByteIndices.length + 1);
+  const strings = new Array<string>(decodedInstructions.size + 1);
 
   strings[0] = settings.keywordCaps ? bitsDirective.toUpperCase() : bitsDirective;
 
-  let instructionIndex = 0;
   let stringIndex = 1;
 
-  for (const [byteIndex, instruction] of instructionsWithByteIndices) {
+  for (const [byteIndex, instruction] of decodedInstructions) {
     const instructionString = printInstruction(instruction, settings);
 
     if (!settings.annotateBytes) {
       strings[stringIndex] = instructionString;
     } else {
-      let nextInstructionByteIndex: number;
+      const byteStrings = new Array<string>(instruction.byteLength);
 
-      if (instructionIndex === instructionsWithByteIndices.length - 1) {
-        nextInstructionByteIndex = instructionBytes.length;
-      } else {
-        nextInstructionByteIndex = instructionsWithByteIndices[instructionIndex + 1][0];
-      }
-
-      const byteStrings = new Array<string>(nextInstructionByteIndex - byteIndex);
-      for (
-        let byteIndexOffset = 0;
-        byteIndex + byteIndexOffset < nextInstructionByteIndex;
-        byteIndexOffset++
-      ) {
-        const byte = instructionBytes[byteIndex + byteIndexOffset];
+      for (let i = 0; i < instruction.byteLength; i++) {
+        const byte = instructionBytes[byteIndex + i];
         switch (settings.annotateBytes.format) {
           case 'binary':
-            byteStrings[byteIndexOffset] = toByteString(byte);
+            byteStrings[i] = toByteString(byte);
             break;
           case 'hex':
-            byteStrings[byteIndexOffset] = byte.toString(16);
+            byteStrings[i] = byte.toString(16);
             break;
           case 'decimal':
-            byteStrings[byteIndexOffset] = byte.toString(10);
+            byteStrings[i] = byte.toString(10);
             break;
         }
       }
@@ -97,7 +80,6 @@ export function printDecodedInstructions(
     }
 
     stringIndex++;
-    instructionIndex++;
   }
 
   return strings.join('\n');

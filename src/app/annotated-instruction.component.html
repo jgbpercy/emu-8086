@@ -13,11 +13,3 @@
     ></annotated-bits></pre>
   <div class="asm">{{ annotatedInstruction.asm }}</div>
 </div>
-
-<div class="simulation-state-diff">
-  <ng-container *ngIf="simulationStateDiff">
-    <ng-container *ngFor="let diff of simulationStateDiff; last as isLast"
-      >{{ diff | printDiff }}<ng-container *ngIf="!isLast"> | </ng-container></ng-container
-    >
-  </ng-container>
-</div>

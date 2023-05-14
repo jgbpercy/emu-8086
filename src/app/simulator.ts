@@ -23,6 +23,8 @@ export interface SimulationState {
   es: number;
   ss: number;
 
+  ip: number;
+
   trapFlag: boolean;
   directionFlag: boolean;
   interruptFlag: boolean;
@@ -38,7 +40,7 @@ type KeyOfType<TObject, TValue> = {
   [K in keyof TObject]-?: TObject[K] extends TValue ? K : never;
 }[keyof TObject];
 
-interface GenericSimulationStatePropertyDiff<T> {
+export interface GenericSimulationStatePropertyDiff<T> {
   key: KeyOfType<SimulationState, T>;
   from: T;
   to: T;
@@ -73,14 +75,19 @@ function simulateInstructionDiff(
       if (dest.kind === 'reg' && source.kind === 'reg') {
         const sourceValue = getRegisterValue(state, source);
 
-        return makeRegisterDestinationAddDiffs(state, dest, sourceValue);
+        return makeRegisterDestinationAddDiffs(state, dest, sourceValue, instruction.byteLength);
       } else {
         return [];
       }
     }
 
     case 'addImmediateToAccumulator':
-      return makeRegisterDestinationAddDiffs(state, instruction.op1, instruction.op2);
+      return makeRegisterDestinationAddDiffs(
+        state,
+        instruction.op1,
+        instruction.op2,
+        instruction.byteLength,
+      );
 
     case 'subRegisterMemoryAndRegisterToEither': {
       const dest = instruction.op1;
@@ -89,14 +96,19 @@ function simulateInstructionDiff(
       if (dest.kind === 'reg' && source.kind === 'reg') {
         const sourceValue = getRegisterValue(state, source);
 
-        return makeRegisterDestinationSubDiffs(state, dest, sourceValue);
+        return makeRegisterDestinationSubDiffs(state, dest, sourceValue, instruction.byteLength);
       } else {
         return [];
       }
     }
 
     case 'subImmediateFromAccumulator':
-      return makeRegisterDestinationSubDiffs(state, instruction.op1, instruction.op2);
+      return makeRegisterDestinationSubDiffs(
+        state,
+        instruction.op1,
+        instruction.op2,
+        instruction.byteLength,
+      );
 
     case 'cmpRegisterMemoryAndRegister': {
       const dest = instruction.op1;
@@ -105,14 +117,19 @@ function simulateInstructionDiff(
       if (dest.kind === 'reg' && source.kind === 'reg') {
         const sourceValue = getRegisterValue(state, source);
 
-        return makeRegisterDestinationCmpDiffs(state, dest, sourceValue);
+        return makeRegisterDestinationCmpDiffs(state, dest, sourceValue, instruction.byteLength);
       } else {
         return [];
       }
     }
 
     case 'cmpImmediateWithAccumulator':
-      return makeRegisterDestinationCmpDiffs(state, instruction.op1, instruction.op2);
+      return makeRegisterDestinationCmpDiffs(
+        state,
+        instruction.op1,
+        instruction.op2,
+        instruction.byteLength,
+      );
 
     case 'addImmediateToRegisterMemory': {
       const dest = instruction.op1;
@@ -122,6 +139,7 @@ function simulateInstructionDiff(
           state,
           dest,
           sanitize8BitSignExtendedNegatives(instruction.op2),
+          instruction.byteLength,
         );
       } else {
         return [];
@@ -136,6 +154,7 @@ function simulateInstructionDiff(
           state,
           dest,
           sanitize8BitSignExtendedNegatives(instruction.op2),
+          instruction.byteLength,
         );
       } else {
         return [];
@@ -150,6 +169,7 @@ function simulateInstructionDiff(
           state,
           dest,
           sanitize8BitSignExtendedNegatives(instruction.op2),
+          instruction.byteLength,
         );
       } else {
         return [];
@@ -163,7 +183,10 @@ function simulateInstructionDiff(
       if (dest.kind === 'reg' && source.kind === 'reg') {
         const sourceValue = getRegisterValue(state, source);
 
-        return [makeSetRegisterValueDiff(state, dest, sourceValue)];
+        return [
+          makeNextInstructionDiff(state, instruction.byteLength),
+          makeSetRegisterValueDiff(state, dest, sourceValue),
+        ];
       } else {
         return [];
       }
@@ -175,7 +198,10 @@ function simulateInstructionDiff(
       const sourceValue = state[instruction.op2];
 
       if (dest.kind === 'reg') {
-        return [makeSetRegisterValueDiff(state, dest, sourceValue)];
+        return [
+          makeNextInstructionDiff(state, instruction.byteLength),
+          makeSetRegisterValueDiff(state, dest, sourceValue),
+        ];
       } else {
         return [];
       }
@@ -188,6 +214,7 @@ function simulateInstructionDiff(
         const sourceValue = getRegisterValue(state, source);
 
         return [
+          makeNextInstructionDiff(state, instruction.byteLength),
           {
             key: instruction.op1,
             from: state[instruction.op1],
@@ -200,12 +227,18 @@ function simulateInstructionDiff(
     }
 
     case 'movImmediateToRegister':
-      return [makeSetRegisterValueDiff(state, instruction.op1, instruction.op2)];
+      return [
+        makeNextInstructionDiff(state, instruction.byteLength),
+        makeSetRegisterValueDiff(state, instruction.op1, instruction.op2),
+      ];
 
     case 'movImmediateToRegisterMemory': {
       const dest = instruction.op1;
       if (dest.kind === 'reg') {
-        return [makeSetRegisterValueDiff(state, dest, instruction.op2)];
+        return [
+          makeNextInstructionDiff(state, instruction.byteLength),
+          makeSetRegisterValueDiff(state, dest, instruction.op2),
+        ];
       } else {
         return [];
       }
@@ -220,6 +253,7 @@ function makeRegisterDestinationAddDiffs(
   state: Readonly<SimulationState>,
   destRegister: Register,
   sourceValue: number,
+  instructionLength: number,
 ): SimulationStateDiff {
   const destValue = getRegisterValue(state, destRegister);
 
@@ -252,6 +286,7 @@ function makeRegisterDestinationAddDiffs(
   }
 
   return [
+    makeNextInstructionDiff(state, instructionLength),
     makeSetRegisterValueDiff(state, destRegister, result),
     ...makeFlagDiffsForArithmeticOp(state, result, overflow, sign, auxCarry, carry),
   ];
@@ -261,6 +296,7 @@ function makeRegisterDestinationSubDiffs(
   state: Readonly<SimulationState>,
   destRegister: Register,
   sourceValue: number,
+  instructionLength: number,
 ): SimulationStateDiff {
   const { result, flagDiffs } = makeRegisterDesintationSubOrCmpResults(
     state,
@@ -268,17 +304,22 @@ function makeRegisterDestinationSubDiffs(
     sourceValue,
   );
 
-  return [makeSetRegisterValueDiff(state, destRegister, result), ...flagDiffs];
+  return [
+    makeNextInstructionDiff(state, instructionLength),
+    makeSetRegisterValueDiff(state, destRegister, result),
+    ...flagDiffs,
+  ];
 }
 
 function makeRegisterDestinationCmpDiffs(
   state: Readonly<SimulationState>,
   destRegister: Register,
   sourceValue: number,
+  instructionLength: number,
 ): SimulationStateDiff {
   const { flagDiffs } = makeRegisterDesintationSubOrCmpResults(state, destRegister, sourceValue);
 
-  return [...flagDiffs];
+  return [makeNextInstructionDiff(state, instructionLength), ...flagDiffs];
 }
 
 function makeRegisterDesintationSubOrCmpResults(
@@ -416,6 +457,17 @@ function* makeFlagDiffsForArithmeticOp(
     key: 'carryFlag',
     from: state.carryFlag,
     to: carry,
+  };
+}
+
+function makeNextInstructionDiff(
+  state: SimulationState,
+  currentInstructionLength: number,
+): SimulationStatePropertyDiff {
+  return {
+    key: 'ip',
+    from: state.ip,
+    to: state.ip + currentInstructionLength,
   };
 }
 

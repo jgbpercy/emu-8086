@@ -9,19 +9,31 @@ import { encodeBitAnnotations } from './encoder';
 import { FlagPipe } from './flag.pipe';
 import { NumPipe } from './num.pipe';
 import { printDecodedInstruction } from './printer';
+import { SimulatedInstructionComponent } from './simulated-instruction.component';
 import { SimulationState, SimulationStateDiff, simulateInstruction } from './simulator';
+
+interface SimulatedInstruction {
+  readonly simulationStateDiff: SimulationStateDiff;
+  readonly asm: string;
+}
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, AnnotatedInstructionComponent, NumPipe, FlagPipe],
+  imports: [
+    CommonModule,
+    AnnotatedInstructionComponent,
+    NumPipe,
+    FlagPipe,
+    SimulatedInstructionComponent,
+  ],
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.scss'],
 })
 export class AppComponent {
-  annotatedInstructions?: ReadonlyArray<
-    AnnotatedInstructionData & { simulationStateDiff: SimulationStateDiff }
-  >;
+  annotatedInstructions?: ReadonlyArray<AnnotatedInstructionData>;
+
+  simulatedInstructions?: ReadonlyArray<SimulatedInstruction>;
 
   readonly simulationState: SimulationState = {
     ax: 0,
@@ -38,6 +50,8 @@ export class AppComponent {
     ds: 0,
     es: 0,
     ss: 0,
+
+    ip: 0,
 
     trapFlag: false,
     directionFlag: false,
@@ -63,18 +77,67 @@ export class AppComponent {
 
         const decodedInstructions = decodeInstructions(instructionBytes);
 
-        // TODO temp duplicating stuff with printer here and in the template obv
-        this.annotatedInstructions = decodedInstructions.map((instruction, i) => {
+        const annotatedInstructions = new Array<AnnotatedInstructionData>(decodedInstructions.size);
+
+        const byteIndexToAsmMap = new Map<number, string>();
+
+        let i = 0;
+        for (const [byteIndex, instruction] of decodedInstructions) {
           const annotatedBits = encodeBitAnnotations(instruction);
 
-          return {
+          const asm = printDecodedInstruction(instruction);
+
+          byteIndexToAsmMap.set(byteIndex, asm);
+
+          annotatedInstructions[i] = {
             lineNumber: i + 1,
-            asm: printDecodedInstruction(instruction),
+            byteIndex,
+            asm,
             instruction: instruction,
             annotatedBits,
-            simulationStateDiff: simulateInstruction(this.simulationState, instruction),
           };
-        });
+
+          i++;
+        }
+
+        this.annotatedInstructions = annotatedInstructions;
+
+        const simulatedInstructions: SimulatedInstruction[] = [];
+
+        // TODO probably put an explicit termination marker (just an implied halt?) in the decided instructions
+        // so that we can tell the difference between getting to the end or getting to an invalid instruction
+        // pointer
+        // TODO do better infinte loop detection!
+        let instructionsSimulated = 0;
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          if (instructionsSimulated > 2000) {
+            break;
+          }
+
+          const instruction = decodedInstructions.get(this.simulationState.ip);
+
+          if (instruction === undefined) {
+            break;
+          }
+
+          const asm = byteIndexToAsmMap.get(this.simulationState.ip);
+
+          if (asm === undefined) {
+            throw Error(
+              `Internal error, could not find asm for instruction at address ${this.simulationState.ip}`,
+            );
+          }
+
+          simulatedInstructions.push({
+            simulationStateDiff: simulateInstruction(this.simulationState, instruction),
+            asm,
+          });
+
+          instructionsSimulated++;
+        }
+
+        this.simulatedInstructions = simulatedInstructions;
       }
     });
 

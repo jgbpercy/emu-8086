@@ -684,7 +684,7 @@ type MiscFfByteInstruction =
   | JmpIndirectIntersegmentInstruction
   | PushRegisterMemoryInstruction;
 
-export type DecodedInstruction =
+type DecodedInstructionInternal =
   | AddRegisterMemoryWithRegisterToEitherInstruction
   | AddImmediateToAccumulatorInstruction
   | PushSegmentRegisterInstruction
@@ -776,6 +776,9 @@ export type DecodedInstruction =
   | MiscFfByteInstruction
   | NotUsedInstruction
   | UnknownInstruction;
+
+const byteLengthKey = 'byteLength';
+export type DecodedInstruction = DecodedInstructionInternal & { readonly [byteLengthKey]: number };
 
 export type RegisterOrEacCategory = Register | EffectiveAddressCalculationCategory;
 
@@ -925,6 +928,8 @@ type RepPrefix = 'rep ' | 'repne ';
 class DecodingContext {
   index = 0;
 
+  instructionStartIndex: number | null = 0;
+
   private _segmentOverridePrefix?: SegmentRegister;
 
   set segmentOverridePrefix(val: SegmentRegister | undefined) {
@@ -974,39 +979,26 @@ type InstructionBytes = Uint8Array;
 
 export function decodeInstructions(
   instructionBytes: InstructionBytes,
-): ReadonlyArray<DecodedInstruction> {
-  const instructions: DecodedInstruction[] = [];
+): ReadonlyMap<number, DecodedInstruction> {
+  const instructions = new Map<number, DecodedInstruction>();
 
   const context = new DecodingContext(instructionBytes);
 
   while (context.index < instructionBytes.length) {
-    console.log(context.index);
-    instructions.push(decodeInstruction(context));
-  }
-
-  return instructions;
-}
-
-export type DecodedInstructionWithByteIndex = [number, DecodedInstruction];
-
-export function decodeInstructionsAndByteIndices(
-  instructionBytes: InstructionBytes,
-): ReadonlyArray<DecodedInstructionWithByteIndex> {
-  const instructions: DecodedInstructionWithByteIndex[] = [];
-
-  const context = new DecodingContext(instructionBytes);
-
-  while (context.index < instructionBytes.length) {
-    instructions.push([context.index, decodeInstruction(context)]);
+    instructions.set(context.index, decodeInstruction(context));
   }
 
   return instructions;
 }
 
 function decodeInstruction(context: DecodingContext): DecodedInstruction {
+  if (context.instructionStartIndex === null) {
+    context.instructionStartIndex = context.index;
+  }
+
   const firstByte = context.instructionBytes[context.index];
 
-  let instruction: DecodedInstruction;
+  let instruction: DecodedInstructionInternal;
 
   switch (firstByte) {
     // 00 - 03
@@ -2745,7 +2737,11 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     throw Error('Unconsumed rep - This instruction is not rep-able');
   }
 
-  return instruction;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (instruction as any)[byteLengthKey] = context.index - context.instructionStartIndex;
+  context.instructionStartIndex = null;
+
+  return instruction as DecodedInstruction;
 }
 
 function decodeDestSourceForModRegRmInstruction(

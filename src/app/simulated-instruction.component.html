@@ -1,0 +1,15 @@
+<div>
+  {{ asm }}
+</div>
+
+<div>
+  <ng-container *ngFor="let diff of registerDiffs; last as isLast">{{
+    diff | printRegisterDiff : isLast
+  }}</ng-container>
+</div>
+
+<div>
+  <ng-container *ngFor="let diff of flagDiffs; last as isLast">{{
+    diff | printFlagDiff : isLast
+  }}</ng-container>
+</div>

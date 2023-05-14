@@ -1,0 +1,16 @@
+@use './sass/colors.scss';
+
+$asm-width: 180px;
+$gap: 8px;
+$flags-width: 300px;
+
+:host {
+  display: grid;
+  grid-template-columns: $asm-width calc(100% - $gap - $asm-width - $gap - $flags-width) $flags-width;
+  gap: $gap;
+  padding: 5px 0;
+
+  &.odd {
+    background: colors.$background-highlight;
+  }
+}
