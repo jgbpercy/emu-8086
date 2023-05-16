@@ -10,6 +10,7 @@ export interface PrinterSettings {
   readonly spaceBetweenOperands?: boolean;
   readonly spacesInAddressCalculation?: boolean;
   readonly spaceAfterSegmentOverridePrefix?: boolean;
+  readonly plusPrefixDirectAddress?: boolean;
   readonly annotateBytes?:
     | false
     | {
@@ -25,6 +26,7 @@ const defaultSettings: Required<PrinterSettings> = {
   spaceBetweenOperands: true,
   spacesInAddressCalculation: true,
   spaceAfterSegmentOverridePrefix: true,
+  plusPrefixDirectAddress: false,
   annotateBytes: false,
 };
 
@@ -385,7 +387,9 @@ function printOperand(operand: Operand, settings: Required<PrinterSettings>): st
     }
 
     if (operand.calculationKind === 'DIRECT ADDRESS') {
-      return `${lengthPrefixString}${segmentOverridePrefixString}[${operand.displacement ?? 0}]`;
+      return `${lengthPrefixString}${segmentOverridePrefixString}[${
+        settings.plusPrefixDirectAddress ? '+' : ''
+      }${operand.displacement ?? 0}]`;
     }
 
     let calculationString: string;

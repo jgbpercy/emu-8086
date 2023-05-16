@@ -1,14 +1,19 @@
-import { DecodedInstruction } from './decoder';
+import { DecodedInstruction, EffectiveAddressCalculation, RegisterOrEac } from './decoder';
 import { KeyOfType } from './key-of-type';
 import {
   Register,
+  SegmentRegister,
   WordRegisterName,
+  bpReg,
+  bxReg,
+  diReg,
   isHigh8BitRegister,
   isWordRegister,
   mainRegisterTable,
+  siReg,
 } from './register-data';
 
-export interface SimulationState {
+interface _SimulationStatePrimatives {
   ax: number;
   bx: number;
   cx: number;
@@ -37,15 +42,103 @@ export interface SimulationState {
   carryFlag: boolean;
 }
 
+export type SimulationState = _SimulationStatePrimatives & {
+  readonly memory: Memory;
+};
+
+export type ReadonlySimulationState = Readonly<_SimulationStatePrimatives> & {
+  readonly memory: ReadonlyMemory;
+};
+
+const total8086MemorySizeInBytes = 2 ** 20;
+const chunkSizePower = 12;
+const chunkSizeInBytes = 2 ** chunkSizePower;
+const chunkMask = (total8086MemorySizeInBytes / chunkSizeInBytes - 1) << chunkSizePower;
+const addressInChunkMask = 2 ** chunkSizePower - 1;
+
+interface ReadonlyMemory {
+  readByte(address: number): number;
+  readWord(address: number): number;
+}
+
+export class Memory implements ReadonlyMemory {
+  private readonly chunks = new Map<number, Uint8Array>();
+
+  readByte(address: number): number {
+    const chunk = this.chunks.get(Memory.getChunk(address));
+
+    if (chunk === undefined) {
+      return 0;
+    }
+
+    return chunk[address & addressInChunkMask];
+  }
+
+  readWord(address: number): number {
+    let leastSignificantByte: number;
+    let mostSignificantByte: number;
+
+    if ((address & addressInChunkMask) === addressInChunkMask) {
+      leastSignificantByte = this.readByte(address);
+      mostSignificantByte = this.readByte(address + 1);
+    } else {
+      const chunk = this.chunks.get(Memory.getChunk(address));
+
+      if (chunk === undefined) {
+        return 0;
+      }
+
+      const addressInChunk = address & addressInChunkMask;
+
+      leastSignificantByte = chunk[addressInChunk];
+      mostSignificantByte = chunk[addressInChunk + 1];
+    }
+
+    return leastSignificantByte + (mostSignificantByte << 8);
+  }
+
+  writeByte(address: number, value: number): void {
+    if (value >= 2 ** 8 || value < 0) {
+      throw Error(`Memory Write Error - ${value} is out of range`);
+    }
+
+    const chunkNumber = Memory.getChunk(address);
+
+    let chunk = this.chunks.get(chunkNumber);
+
+    if (chunk === undefined) {
+      chunk = new Uint8Array(chunkSizeInBytes).fill(0);
+      this.chunks.set(chunkNumber, chunk);
+    }
+
+    chunk[address & addressInChunkMask] = value;
+  }
+
+  private static getChunk(address: number): number {
+    if (address >= total8086MemorySizeInBytes || address < 0) {
+      throw Error(`Memory Access Error - ${address} is out of range`);
+    }
+
+    return address & chunkMask;
+  }
+}
+
 export interface GenericSimulationStatePropertyDiff<T> {
-  key: KeyOfType<SimulationState, T>;
-  from: T;
-  to: T;
+  readonly key: KeyOfType<SimulationState, T>;
+  readonly from: T;
+  readonly to: T;
+}
+
+export interface MemoryDiff {
+  readonly address: number;
+  readonly from: number;
+  readonly to: number;
 }
 
 export type SimulationStatePropertyDiff =
   | GenericSimulationStatePropertyDiff<number>
-  | GenericSimulationStatePropertyDiff<boolean>;
+  | GenericSimulationStatePropertyDiff<boolean>
+  | MemoryDiff;
 
 export type SimulationStateDiff = ReadonlyArray<SimulationStatePropertyDiff>;
 
@@ -61,70 +154,64 @@ export function simulateInstruction(
 }
 
 function simulateInstructionDiff(
-  state: Readonly<SimulationState>,
+  state: ReadonlySimulationState,
   instruction: DecodedInstruction,
 ): Readonly<SimulationStateDiff> {
   switch (instruction.kind) {
     case 'addRegisterMemoryWithRegisterToEither': {
-      const dest = instruction.op1;
-      const source = instruction.op2;
+      const regOperand = getRegisterOperand(instruction);
 
-      if (dest.kind === 'reg' && source.kind === 'reg') {
-        const sourceValue = getRegisterValue(state, source);
+      const word = isWordRegister(regOperand);
 
-        return makeRegisterDestinationAddDiffs(state, dest, sourceValue, instruction.byteLength);
-      } else {
-        return [];
-      }
+      const sourceValue = getRegisterOrEacValue(state, instruction.op2, word, 'ds');
+
+      return makeAddDiffs(state, instruction.op1, sourceValue, word, instruction.byteLength);
     }
 
     case 'addImmediateToAccumulator':
-      return makeRegisterDestinationAddDiffs(
+      return makeAddDiffs(
         state,
         instruction.op1,
         instruction.op2,
+        isWordRegister(instruction.op1),
         instruction.byteLength,
       );
 
     case 'subRegisterMemoryAndRegisterToEither': {
-      const dest = instruction.op1;
-      const source = instruction.op2;
+      const regOperand = getRegisterOperand(instruction);
 
-      if (dest.kind === 'reg' && source.kind === 'reg') {
-        const sourceValue = getRegisterValue(state, source);
+      const word = isWordRegister(regOperand);
 
-        return makeRegisterDestinationSubDiffs(state, dest, sourceValue, instruction.byteLength);
-      } else {
-        return [];
-      }
+      const sourceValue = getRegisterOrEacValue(state, instruction.op2, word, 'ds');
+
+      return makeSubDiffs(state, instruction.op1, sourceValue, word, instruction.byteLength);
     }
 
     case 'subImmediateFromAccumulator':
-      return makeRegisterDestinationSubDiffs(
+      return makeSubDiffs(
         state,
         instruction.op1,
         instruction.op2,
+        isWordRegister(instruction.op1),
         instruction.byteLength,
       );
 
     case 'cmpRegisterMemoryAndRegister': {
-      const dest = instruction.op1;
-      const source = instruction.op2;
+      const regOperand = getRegisterOperand(instruction);
 
-      if (dest.kind === 'reg' && source.kind === 'reg') {
-        const sourceValue = getRegisterValue(state, source);
+      const word = isWordRegister(regOperand);
 
-        return makeRegisterDestinationCmpDiffs(state, dest, sourceValue, instruction.byteLength);
-      } else {
-        return [];
-      }
+      const sourceValue = getRegisterOrEacValue(state, instruction.op2, word, 'ds');
+
+      return makeCmpDiffs(state, instruction.op1, sourceValue, word, instruction.byteLength);
     }
 
     case 'cmpImmediateWithAccumulator':
-      return makeRegisterDestinationCmpDiffs(
+      return makeCmpDiffs(
         state,
         instruction.op1,
         instruction.op2,
+        isWordRegister(instruction.op1),
         instruction.byteLength,
       );
 
@@ -197,62 +284,54 @@ function simulateInstructionDiff(
     case 'addImmediateToRegisterMemory': {
       const dest = instruction.op1;
 
-      if (dest.kind === 'reg') {
-        return makeRegisterDestinationAddDiffs(
-          state,
-          dest,
-          sanitize8BitSignExtendedNegatives(instruction.op2),
-          instruction.byteLength,
-        );
-      } else {
-        return [];
-      }
+      return makeAddDiffs(
+        state,
+        dest,
+        sanitize8BitSignExtendedNegatives(instruction.op2),
+        dest.kind === 'reg' ? isWordRegister(dest) : dest.length === 2,
+        instruction.byteLength,
+      );
     }
 
     case 'subImmediateToRegisterMemory': {
       const dest = instruction.op1;
 
-      if (dest.kind === 'reg') {
-        return makeRegisterDestinationSubDiffs(
-          state,
-          dest,
-          sanitize8BitSignExtendedNegatives(instruction.op2),
-          instruction.byteLength,
-        );
-      } else {
-        return [];
-      }
+      return makeSubDiffs(
+        state,
+        dest,
+        sanitize8BitSignExtendedNegatives(instruction.op2),
+        dest.kind === 'reg' ? isWordRegister(dest) : dest.length === 2,
+        instruction.byteLength,
+      );
     }
 
     case 'cmpImmediateToRegisterMemory': {
       const dest = instruction.op1;
 
-      if (dest.kind === 'reg') {
-        return makeRegisterDestinationCmpDiffs(
-          state,
-          dest,
-          sanitize8BitSignExtendedNegatives(instruction.op2),
-          instruction.byteLength,
-        );
-      } else {
-        return [];
-      }
+      return makeCmpDiffs(
+        state,
+        dest,
+        sanitize8BitSignExtendedNegatives(instruction.op2),
+        dest.kind === 'reg' ? isWordRegister(dest) : dest.length === 2,
+        instruction.byteLength,
+      );
     }
 
     case 'movRegisterMemoryToFromRegister': {
+      const regOperand = getRegisterOperand(instruction);
+
+      const word = isWordRegister(regOperand);
+
+      const sourceValue = getRegisterOrEacValue(state, instruction.op2, word, 'ds');
+
       const dest = instruction.op1;
-      const source = instruction.op2;
 
-      if (dest.kind === 'reg' && source.kind === 'reg') {
-        const sourceValue = getRegisterValue(state, source);
-
-        return [
-          makeNextInstructionDiff(state, instruction.byteLength),
-          makeSetRegisterValueDiff(state, dest, sourceValue),
-        ];
-      } else {
-        return [];
-      }
+      return [
+        makeNextInstructionDiff(state, instruction.byteLength),
+        dest.kind === 'reg'
+          ? makeSetRegisterValueDiff(state, dest, sourceValue)
+          : makeSetMemoryValueDiff(state, dest, sourceValue, word, 'ds'),
+      ];
     }
 
     case 'movSegmentRegisterToRegisterMemory': {
@@ -260,33 +339,27 @@ function simulateInstructionDiff(
 
       const sourceValue = state[instruction.op2];
 
-      if (dest.kind === 'reg') {
-        return [
-          makeNextInstructionDiff(state, instruction.byteLength),
-          makeSetRegisterValueDiff(state, dest, sourceValue),
-        ];
-      } else {
-        return [];
-      }
+      return [
+        makeNextInstructionDiff(state, instruction.byteLength),
+        dest.kind === 'reg'
+          ? makeSetRegisterValueDiff(state, dest, sourceValue)
+          : makeSetMemoryValueDiff(state, dest, sourceValue, true, 'ds'),
+      ];
     }
 
     case 'movRegisterMemoryToSegmentRegister': {
       const source = instruction.op2;
 
-      if (source.kind === 'reg') {
-        const sourceValue = getRegisterValue(state, source);
+      const sourceValue = getRegisterOrEacValue(state, source, true, 'ds');
 
-        return [
-          makeNextInstructionDiff(state, instruction.byteLength),
-          {
-            key: instruction.op1,
-            from: state[instruction.op1],
-            to: sourceValue,
-          },
-        ];
-      } else {
-        return [];
-      }
+      return [
+        makeNextInstructionDiff(state, instruction.byteLength),
+        {
+          key: instruction.op1,
+          from: state[instruction.op1],
+          to: sourceValue,
+        },
+      ];
     }
 
     case 'movImmediateToRegister':
@@ -297,14 +370,13 @@ function simulateInstructionDiff(
 
     case 'movImmediateToRegisterMemory': {
       const dest = instruction.op1;
-      if (dest.kind === 'reg') {
-        return [
-          makeNextInstructionDiff(state, instruction.byteLength),
-          makeSetRegisterValueDiff(state, dest, instruction.op2),
-        ];
-      } else {
-        return [];
-      }
+
+      return [
+        makeNextInstructionDiff(state, instruction.byteLength),
+        dest.kind === 'reg'
+          ? makeSetRegisterValueDiff(state, dest, instruction.op2)
+          : makeSetMemoryValueDiff(state, dest, instruction.op2, dest.length === 2, 'ds'),
+      ];
     }
 
     case 'loopneLoopWhileNotEqual':
@@ -326,8 +398,21 @@ function simulateInstructionDiff(
   }
 }
 
+function getRegisterOperand(instruction: {
+  readonly op1: RegisterOrEac;
+  readonly op2: RegisterOrEac;
+}): Register {
+  const regOperand = instruction.op1.kind === 'reg' ? instruction.op1 : instruction.op2;
+
+  if (regOperand.kind !== 'reg') {
+    throw Error('Internal Error - Two memory operands?');
+  }
+
+  return regOperand;
+}
+
 function makeLoopDiff(
-  state: Readonly<SimulationState>,
+  state: ReadonlySimulationState,
   instruction: { op1: number; byteLength: number },
   condition: boolean,
 ): SimulationStateDiff {
@@ -348,7 +433,7 @@ function makeLoopDiff(
 }
 
 function makeShortLabelJumpDiff(
-  state: Readonly<SimulationState>,
+  state: ReadonlySimulationState,
   instruction: { op1: number; byteLength: number },
   condition: boolean,
 ): SimulationStateDiff {
@@ -357,19 +442,20 @@ function makeShortLabelJumpDiff(
     : [makeNextInstructionDiff(state, instruction.byteLength)];
 }
 
-function makeRegisterDestinationAddDiffs(
-  state: Readonly<SimulationState>,
-  destRegister: Register,
+function makeAddDiffs(
+  state: ReadonlySimulationState,
+  dest: RegisterOrEac,
   sourceValue: number,
+  word: boolean,
   instructionLength: number,
 ): SimulationStateDiff {
-  const destValue = getRegisterValue(state, destRegister);
+  const destValue = getRegisterOrEacValue(state, dest, word, 'ds');
 
   const auxCarry = (destValue & 0b1111) + (sourceValue & 0b1111) > 0b1111;
 
   let result = destValue + sourceValue;
 
-  const max = isWordRegister(destRegister) ? 65536 : 128;
+  const max = word ? 65536 : 128;
 
   let overflow = false;
   let carry = false;
@@ -395,56 +481,59 @@ function makeRegisterDestinationAddDiffs(
 
   return [
     makeNextInstructionDiff(state, instructionLength),
-    makeSetRegisterValueDiff(state, destRegister, result),
+    dest.kind === 'reg'
+      ? makeSetRegisterValueDiff(state, dest, result)
+      : makeSetMemoryValueDiff(state, dest, result, word, 'ds'),
     ...makeFlagDiffsForArithmeticOp(state, result, overflow, sign, auxCarry, carry),
   ];
 }
 
-function makeRegisterDestinationSubDiffs(
-  state: Readonly<SimulationState>,
-  destRegister: Register,
+function makeSubDiffs(
+  state: ReadonlySimulationState,
+  dest: RegisterOrEac,
   sourceValue: number,
+  word: boolean,
   instructionLength: number,
 ): SimulationStateDiff {
-  const { result, flagDiffs } = makeRegisterDesintationSubOrCmpResults(
-    state,
-    destRegister,
-    sourceValue,
-  );
+  const { result, flagDiffs } = makeSubOrCmpResults(state, dest, sourceValue, word);
 
   return [
     makeNextInstructionDiff(state, instructionLength),
-    makeSetRegisterValueDiff(state, destRegister, result),
+    dest.kind === 'reg'
+      ? makeSetRegisterValueDiff(state, dest, result)
+      : makeSetMemoryValueDiff(state, dest, sourceValue, word, 'ds'),
     ...flagDiffs,
   ];
 }
 
-function makeRegisterDestinationCmpDiffs(
-  state: Readonly<SimulationState>,
-  destRegister: Register,
+function makeCmpDiffs(
+  state: ReadonlySimulationState,
+  dest: RegisterOrEac,
   sourceValue: number,
+  word: boolean,
   instructionLength: number,
 ): SimulationStateDiff {
-  const { flagDiffs } = makeRegisterDesintationSubOrCmpResults(state, destRegister, sourceValue);
+  const { flagDiffs } = makeSubOrCmpResults(state, dest, sourceValue, word);
 
   return [makeNextInstructionDiff(state, instructionLength), ...flagDiffs];
 }
 
-function makeRegisterDesintationSubOrCmpResults(
-  state: Readonly<SimulationState>,
-  destRegister: Register,
+function makeSubOrCmpResults(
+  state: ReadonlySimulationState,
+  dest: RegisterOrEac,
   sourceValue: number,
+  word: boolean,
 ): {
   readonly result: number;
   readonly flagDiffs: Generator<SimulationStatePropertyDiff>;
 } {
-  const destValue = getRegisterValue(state, destRegister);
+  const destValue = getRegisterOrEacValue(state, dest, word, 'ds');
 
   const auxCarry = (destValue & 0b1111) < (sourceValue & 0b1111);
 
   let result = destValue - sourceValue;
 
-  const max = isWordRegister(destRegister) ? 65536 : 128;
+  const max = word ? 65536 : 128;
 
   let carry = false;
   let overflow = false;
@@ -479,7 +568,20 @@ function makeRegisterDesintationSubOrCmpResults(
   };
 }
 
-function getRegisterValue(state: Readonly<SimulationState>, register: Register): number {
+function getRegisterOrEacValue(
+  state: ReadonlySimulationState,
+  registerOrEac: RegisterOrEac,
+  word: boolean,
+  defaultSegment: SegmentRegister,
+): number {
+  if (registerOrEac.kind === 'reg') {
+    return getRegisterValue(state, registerOrEac);
+  } else {
+    return getMemoryValue(state, registerOrEac, word, defaultSegment);
+  }
+}
+
+function getRegisterValue(state: ReadonlySimulationState, register: Register): number {
   if (isWordRegister(register)) {
     return state[register.name];
   } else {
@@ -493,8 +595,62 @@ function getRegisterValue(state: Readonly<SimulationState>, register: Register):
   }
 }
 
+function getMemoryValue(
+  state: ReadonlySimulationState,
+  eac: EffectiveAddressCalculation,
+  word: boolean,
+  defaultSegment: SegmentRegister,
+): number {
+  const address = getMemoryAddress(state, eac, defaultSegment);
+
+  return word ? state.memory.readWord(address) : state.memory.readByte(address);
+}
+
+function getMemoryAddress(
+  state: ReadonlySimulationState,
+  eac: EffectiveAddressCalculation,
+  defaultSegment: SegmentRegister,
+): number {
+  let addressFromRegigsterPart: number;
+  switch (eac.calculationKind) {
+    case 'bx + si':
+      addressFromRegigsterPart = getRegisterValue(state, bxReg) + getRegisterValue(state, siReg);
+      break;
+    case 'bx + di':
+      addressFromRegigsterPart = getRegisterValue(state, bxReg) + getRegisterValue(state, diReg);
+      break;
+    case 'bp + si':
+      addressFromRegigsterPart = getRegisterValue(state, bpReg) + getRegisterValue(state, siReg);
+      break;
+    case 'bp + di':
+      addressFromRegigsterPart = getRegisterValue(state, bpReg) + getRegisterValue(state, diReg);
+      break;
+    case 'si':
+      addressFromRegigsterPart = getRegisterValue(state, siReg);
+      break;
+    case 'di':
+      addressFromRegigsterPart = getRegisterValue(state, diReg);
+      break;
+    case 'bp':
+      addressFromRegigsterPart = getRegisterValue(state, bpReg);
+      break;
+    case 'bx':
+      addressFromRegigsterPart = getRegisterValue(state, bxReg);
+      break;
+    case 'DIRECT ADDRESS':
+      addressFromRegigsterPart = 0;
+      break;
+  }
+
+  const segmentRegister = eac.segmentOverridePrefix ?? defaultSegment;
+
+  const segmentValue = state[segmentRegister];
+
+  return (segmentValue << 4) + (addressFromRegigsterPart + (eac.displacement ?? 0));
+}
+
 function makeSetRegisterValueDiff(
-  state: Readonly<SimulationState>,
+  state: ReadonlySimulationState,
   register: Register,
   value: number,
 ): SimulationStatePropertyDiff {
@@ -521,8 +677,24 @@ function makeSetRegisterValueDiff(
   };
 }
 
+function makeSetMemoryValueDiff(
+  state: ReadonlySimulationState,
+  eac: EffectiveAddressCalculation,
+  value: number,
+  word: boolean,
+  defaultSegment: SegmentRegister,
+): SimulationStatePropertyDiff {
+  const address = getMemoryAddress(state, eac, defaultSegment);
+
+  return {
+    address,
+    from: word ? state.memory.readWord(address) : state.memory.readByte(address),
+    to: value,
+  };
+}
+
 function* makeFlagDiffsForArithmeticOp(
-  state: Readonly<SimulationState>,
+  state: ReadonlySimulationState,
   result: number,
   overflow: boolean,
   sign: boolean,
@@ -573,7 +745,7 @@ function* makeFlagDiffsForArithmeticOp(
 }
 
 function makeNextInstructionDiff(
-  state: SimulationState,
+  state: ReadonlySimulationState,
   currentInstructionLength: number,
 ): SimulationStatePropertyDiff {
   return {
@@ -585,9 +757,13 @@ function makeNextInstructionDiff(
 
 function applyDiff(state: SimulationState, diff: SimulationStateDiff): void {
   for (const propertyDiff of diff) {
-    // @ts-expect-error the type of SimulationStatePropertyDiff guarantees that we've got the correct
-    // relationship between the key and the type of to (or from), but TS doesn't understand that relationship
-    state[propertyDiff.key] = propertyDiff.to;
+    if ('key' in propertyDiff) {
+      // @ts-expect-error the type of SimulationStatePropertyDiff guarantees that we've got the correct
+      // relationship between the key and the type of to (or from), but TS doesn't understand that relationship
+      state[propertyDiff.key] = propertyDiff.to;
+    } else {
+      state.memory.writeByte(propertyDiff.address, propertyDiff.to);
+    }
   }
 }
 

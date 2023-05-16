@@ -47,7 +47,8 @@ export class SimulatedInstructionComponent implements OnChanges {
 
   ngOnChanges(): void {
     this.registerDiffs = this.simulationStateDiff.filter(
-      (diff): diff is GenericSimulationStatePropertyDiff<number> => typeof diff.from === 'number',
+      (diff): diff is GenericSimulationStatePropertyDiff<number> =>
+        'key' in diff && typeof diff.from === 'number',
     );
 
     this.flagDiffs = this.simulationStateDiff.filter(

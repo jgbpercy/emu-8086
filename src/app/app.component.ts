@@ -11,7 +11,7 @@ import { FlagPipe } from './flag.pipe';
 import { NumPipe } from './num.pipe';
 import { SimulatedInstructionComponent } from './simulated-instruction.component';
 import { SimulatedInstruction, caseyPrint } from './simulation-printer';
-import { SimulationState, simulateInstruction } from './simulator';
+import { Memory, SimulationState, simulateInstruction } from './simulator';
 
 @Component({
   selector: 'app-root',
@@ -60,6 +60,8 @@ export class AppComponent {
     auxCarryFlag: false,
     parityFlag: false,
     carryFlag: false,
+
+    memory: new Memory(),
   };
 
   gotFile(evt: Event): void {
@@ -83,7 +85,10 @@ export class AppComponent {
         for (const [byteIndex, instruction] of decodedInstructions) {
           const annotatedBits = encodeBitAnnotations(instruction);
 
-          const asm = printDecodedInstruction(instruction);
+          const asm = printDecodedInstruction(instruction, {
+            spacesInAddressCalculation: false,
+            plusPrefixDirectAddress: true,
+          });
 
           byteIndexToAsmMap.set(byteIndex, asm);
 

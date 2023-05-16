@@ -66,6 +66,10 @@ function caseyPrintRegisterDiffs(diff: SimulationStateDiff): string {
 
   let ipDiff: GenericSimulationStatePropertyDiff<number> | undefined = undefined;
   for (const propertyDiff of diff) {
+    if (!('key' in propertyDiff)) {
+      continue;
+    }
+
     if (propertyDiff.key === 'ip') {
       ipDiff = propertyDiff;
     } else if (typeof propertyDiff.from === 'number') {
@@ -86,6 +90,10 @@ function caseyPrintFlagDiffs(diff: SimulationStateDiff, state: CaseyFlagsState):
   const before = caseyPrintFlags(state);
 
   for (const propertyDiff of diff) {
+    if (!('key' in propertyDiff)) {
+      continue;
+    }
+
     let flagChanged = false;
     switch (propertyDiff.key) {
       case 'carryFlag':
