@@ -16,8 +16,6 @@ import {
   wordRegisterDecodingTable,
 } from './register-data';
 
-// TODO consolidate thrown Errors/Not Used/Unknown into coherent error handling that outputs what went wrong
-
 export type Operand = Register | SegmentRegister | EffectiveAddressCalculation | number;
 
 interface _NoOperandInstruction<TKind extends string> {

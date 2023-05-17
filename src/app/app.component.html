@@ -31,68 +31,108 @@
     </div>
 
     <div class="simulation-state">
-      <h3>CPU State</h3>
+      <div class="cpu-state">
+        <h3>CPU State</h3>
 
-      <div class="simulation-state-content">
-        <div>
+        <div class="cpu-state-content">
           <div>
-            ax: 0x{{ simulationState.ax | num : 16 : 4 }} ({{ simulationState.ax | num : 10 : 0 }})
+            <div>
+              ax: 0x{{ simulationState.ax | num : 16 : 4 }} ({{
+                simulationState.ax | num : 10 : 0
+              }})
+            </div>
+            <div>
+              bx: 0x{{ simulationState.bx | num : 16 : 4 }} ({{
+                simulationState.bx | num : 10 : 0
+              }})
+            </div>
+            <div>
+              cx: 0x{{ simulationState.cx | num : 16 : 4 }} ({{
+                simulationState.cx | num : 10 : 0
+              }})
+            </div>
+            <div>
+              dx: 0x{{ simulationState.dx | num : 16 : 4 }} ({{
+                simulationState.dx | num : 10 : 0
+              }})
+            </div>
           </div>
           <div>
-            bx: 0x{{ simulationState.bx | num : 16 : 4 }} ({{ simulationState.bx | num : 10 : 0 }})
+            <div>
+              sp: 0x{{ simulationState.sp | num : 16 : 4 }} ({{
+                simulationState.sp | num : 10 : 0
+              }})
+            </div>
+            <div>
+              bp: 0x{{ simulationState.bp | num : 16 : 4 }} ({{
+                simulationState.bp | num : 10 : 0
+              }})
+            </div>
+            <div>
+              si: 0x{{ simulationState.si | num : 16 : 4 }} ({{
+                simulationState.si | num : 10 : 0
+              }})
+            </div>
+            <div>
+              di: 0x{{ simulationState.di | num : 16 : 4 }} ({{
+                simulationState.di | num : 10 : 0
+              }})
+            </div>
           </div>
           <div>
-            cx: 0x{{ simulationState.cx | num : 16 : 4 }} ({{ simulationState.cx | num : 10 : 0 }})
+            <div>
+              cs: 0x{{ simulationState.cs | num : 16 : 4 }} ({{
+                simulationState.cs | num : 10 : 0
+              }})
+            </div>
+            <div>
+              ds: 0x{{ simulationState.ds | num : 16 : 4 }} ({{
+                simulationState.ds | num : 10 : 0
+              }})
+            </div>
+            <div>
+              es: 0x{{ simulationState.es | num : 16 : 4 }} ({{
+                simulationState.si | num : 10 : 0
+              }})
+            </div>
+            <div>
+              ss: 0x{{ simulationState.ss | num : 16 : 4 }} ({{
+                simulationState.ss | num : 10 : 0
+              }})
+            </div>
           </div>
           <div>
-            dx: 0x{{ simulationState.dx | num : 16 : 4 }} ({{ simulationState.dx | num : 10 : 0 }})
+            <div>
+              ip: 0x{{ simulationState.ip | num : 16 : 4 }} ({{
+                simulationState.ip | num : 10 : 0
+              }})
+            </div>
+            <div>trap: {{ simulationState.trapFlag | flag }}</div>
+            <div>direction: {{ simulationState.directionFlag | flag }}</div>
+            <div>interrupt: {{ simulationState.interruptFlag | flag }}</div>
+          </div>
+          <div>
+            <div>overflow: {{ simulationState.overflowFlag | flag }}</div>
+            <div>sign: {{ simulationState.signFlag | flag }}</div>
+            <div>zero: {{ simulationState.zeroFlag | flag }}</div>
+          </div>
+          <div>
+            <div>auxCarry: {{ simulationState.auxCarryFlag | flag }}</div>
+            <div>parity: {{ simulationState.parityFlag | flag }}</div>
+            <div>carry: {{ simulationState.carryFlag | flag }}</div>
           </div>
         </div>
-        <div>
-          <div>
-            sp: 0x{{ simulationState.sp | num : 16 : 4 }} ({{ simulationState.sp | num : 10 : 0 }})
-          </div>
-          <div>
-            bp: 0x{{ simulationState.bp | num : 16 : 4 }} ({{ simulationState.bp | num : 10 : 0 }})
-          </div>
-          <div>
-            si: 0x{{ simulationState.si | num : 16 : 4 }} ({{ simulationState.si | num : 10 : 0 }})
-          </div>
-          <div>
-            di: 0x{{ simulationState.di | num : 16 : 4 }} ({{ simulationState.di | num : 10 : 0 }})
-          </div>
-        </div>
-        <div>
-          <div>
-            cs: 0x{{ simulationState.cs | num : 16 : 4 }} ({{ simulationState.cs | num : 10 : 0 }})
-          </div>
-          <div>
-            ds: 0x{{ simulationState.ds | num : 16 : 4 }} ({{ simulationState.ds | num : 10 : 0 }})
-          </div>
-          <div>
-            es: 0x{{ simulationState.es | num : 16 : 4 }} ({{ simulationState.si | num : 10 : 0 }})
-          </div>
-          <div>
-            ss: 0x{{ simulationState.ss | num : 16 : 4 }} ({{ simulationState.ss | num : 10 : 0 }})
-          </div>
-        </div>
-        <div>
-          <div>
-            ip: 0x{{ simulationState.ip | num : 16 : 4 }} ({{ simulationState.ip | num : 10 : 0 }})
-          </div>
-          <div>trap: {{ simulationState.trapFlag | flag }}</div>
-          <div>direction: {{ simulationState.directionFlag | flag }}</div>
-          <div>interrupt: {{ simulationState.interruptFlag | flag }}</div>
-        </div>
-        <div>
-          <div>overflow: {{ simulationState.overflowFlag | flag }}</div>
-          <div>sign: {{ simulationState.signFlag | flag }}</div>
-          <div>zero: {{ simulationState.zeroFlag | flag }}</div>
-        </div>
-        <div>
-          <div>auxCarry: {{ simulationState.auxCarryFlag | flag }}</div>
-          <div>parity: {{ simulationState.parityFlag | flag }}</div>
-          <div>carry: {{ simulationState.carryFlag | flag }}</div>
+      </div>
+
+      <div class="memory-state">
+        <h3>Memory</h3>
+
+        <div class="memory-state-content">
+          <ng-container *ngFor="let control of memoryAddressFormArray.controls; index as i">
+            <input [formControl]="control" />
+
+            <div>{{ (memoryValues | async)![i] }}</div>
+          </ng-container>
         </div>
       </div>
     </div>

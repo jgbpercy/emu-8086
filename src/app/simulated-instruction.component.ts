@@ -2,18 +2,27 @@ import { CommonModule } from '@angular/common';
 import { Component, HostBinding, Input, OnChanges, Pipe, PipeTransform } from '@angular/core';
 import { printFlag } from './flag.pipe';
 import { printNum } from './num.pipe';
-import { GenericSimulationStatePropertyDiff, SimulationStateDiff } from './simulator';
+import { GenericSimulationStatePropertyDiff, MemoryDiff, SimulationStateDiff } from './simulator';
 
 @Pipe({
-  name: 'printRegisterDiff',
+  name: 'printRegisterMemoryDiff',
   pure: true,
   standalone: true,
 })
-export class RegisterDiffPipe implements PipeTransform {
-  transform(value: GenericSimulationStatePropertyDiff<number>, isLast: boolean): string {
-    return `${value.key}: 0x${printNum(value.from, 16, 4)} -> 0x${printNum(value.to, 16, 4)}${
+export class RegisterMemoryDiffPipe implements PipeTransform {
+  transform(
+    value: GenericSimulationStatePropertyDiff<number> | MemoryDiff,
+    isLast: boolean,
+  ): string {
+    const valueChangePart = `0x${printNum(value.from, 16, 4)} -> 0x${printNum(value.to, 16, 4)}${
       isLast ? '' : ' | '
     }`;
+
+    if ('key' in value) {
+      return `${value.key}: ${valueChangePart}`;
+    } else {
+      return `mx${printNum(value.address, 16, 5)}: ${valueChangePart}`;
+    }
   }
 }
 
@@ -31,14 +40,14 @@ export class FlagDiffPipe implements PipeTransform {
 @Component({
   selector: 'simulated-instruction',
   standalone: true,
-  imports: [CommonModule, RegisterDiffPipe, FlagDiffPipe],
+  imports: [CommonModule, RegisterMemoryDiffPipe, FlagDiffPipe],
   templateUrl: './simulated-instruction.component.html',
   styleUrls: ['./simulated-instruction.component.scss'],
 })
 export class SimulatedInstructionComponent implements OnChanges {
   @Input() simulationStateDiff!: SimulationStateDiff;
 
-  registerDiffs!: ReadonlyArray<GenericSimulationStatePropertyDiff<number>>;
+  registerDiffs!: ReadonlyArray<GenericSimulationStatePropertyDiff<number> | MemoryDiff>;
   flagDiffs!: ReadonlyArray<GenericSimulationStatePropertyDiff<boolean>>;
 
   @Input() asm!: string;
@@ -47,8 +56,8 @@ export class SimulatedInstructionComponent implements OnChanges {
 
   ngOnChanges(): void {
     this.registerDiffs = this.simulationStateDiff.filter(
-      (diff): diff is GenericSimulationStatePropertyDiff<number> =>
-        'key' in diff && typeof diff.from === 'number',
+      (diff): diff is GenericSimulationStatePropertyDiff<number> | MemoryDiff =>
+        typeof diff.from === 'number',
     );
 
     this.flagDiffs = this.simulationStateDiff.filter(

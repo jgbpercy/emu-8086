@@ -57,6 +57,11 @@ button {
   }
 }
 
+input {
+  background: #222222;
+  padding: 2px;
+}
+
 .output {
   height: 100%;
   display: flex;
@@ -72,9 +77,11 @@ button {
 
 .simulation-state {
   flex: 1 0 auto;
+  display: grid;
+  grid-template-columns: 68% 32%;
 }
 
-.simulation-state-content {
+.cpu-state-content {
   display: flex;
   flex-direction: row;
   justify-content: space-evenly;
@@ -90,4 +97,11 @@ button {
   height: 100%;
   flex: 50%;
   overflow-y: auto;
+}
+
+.memory-state-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  row-gap: 4px;
 }

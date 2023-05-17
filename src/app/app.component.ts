@@ -1,5 +1,7 @@
 import { CommonModule } from '@angular/common';
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
+import { FormBuilder, FormControl, ReactiveFormsModule } from '@angular/forms';
+import { map } from 'rxjs';
 import {
   AnnotatedInstructionComponent,
   AnnotatedInstructionData,
@@ -8,10 +10,32 @@ import { printDecodedInstruction } from './decoded-instruction-printer';
 import { decodeInstructions } from './decoder';
 import { encodeBitAnnotations } from './encoder';
 import { FlagPipe } from './flag.pipe';
-import { NumPipe } from './num.pipe';
+import { Memory, total8086MemorySizeInBytes } from './memory';
+import { NumPipe, printNum } from './num.pipe';
 import { SimulatedInstructionComponent } from './simulated-instruction.component';
 import { SimulatedInstruction, caseyPrint } from './simulation-printer';
-import { Memory, SimulationState, simulateInstruction } from './simulator';
+import { SimulationState, simulateInstruction } from './simulator';
+import { valueChangesWithInitial } from './value-changes-with-initial';
+
+/* TODO:
+ *
+ * Features:
+ * - Simulate all instructions
+ * - asm parser and assembler
+ * - More & Better memory views
+ * - asm syntax highlighting
+ * - tooltips for byte annotations
+ * - Step-through simulation
+ * - Tests!
+ * - Build in example instructions/programs
+ *
+ * Fixes/improvements:
+ * - Fix jump label asm printing to be nasm compatible
+ * - Make the instructions actually part of the memory
+ * - Do segmentation properly?
+ * - Ability to add more
+ * - Add address to instruction view
+ */
 
 @Component({
   selector: 'app-root',
@@ -22,11 +46,14 @@ import { Memory, SimulationState, simulateInstruction } from './simulator';
     NumPipe,
     FlagPipe,
     SimulatedInstructionComponent,
+    ReactiveFormsModule,
   ],
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.scss'],
 })
 export class AppComponent {
+  readonly fb = inject(FormBuilder);
+
   annotatedInstructions?: ReadonlyArray<AnnotatedInstructionData>;
 
   simulatedInstructions?: ReadonlyArray<SimulatedInstruction>;
@@ -63,6 +90,31 @@ export class AppComponent {
 
     memory: new Memory(),
   };
+
+  readonly memoryAddressFormArray = this.fb.array<FormControl<string>>([
+    this.fb.control('0', { nonNullable: true }),
+    this.fb.control('1', { nonNullable: true }),
+  ]);
+
+  readonly memoryValues = valueChangesWithInitial(this.memoryAddressFormArray).pipe(
+    map((addresseStrings) => {
+      return addresseStrings.map((addressString) => {
+        if (/[^0-9a-fA-F]/.test(addressString)) {
+          return '-';
+        }
+
+        const parsed = parseInt(addressString, 16);
+
+        if (Number.isNaN(parsed) || parsed >= total8086MemorySizeInBytes || parsed < 0) {
+          return '-';
+        }
+
+        const val = this.simulationState.memory.readByte(parsed);
+
+        return `0x${printNum(val, 16, 2)} (${printNum(val, 10, 0)})`;
+      });
+    }),
+  );
 
   gotFile(evt: Event): void {
     if (!(evt.target instanceof HTMLInputElement)) {
