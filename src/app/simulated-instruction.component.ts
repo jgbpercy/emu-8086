@@ -14,14 +14,16 @@ export class RegisterMemoryDiffPipe implements PipeTransform {
     value: GenericSimulationStatePropertyDiff<number> | MemoryDiff,
     isLast: boolean,
   ): string {
-    const valueChangePart = `0x${printNum(value.from, 16, 4)} -> 0x${printNum(value.to, 16, 4)}${
-      isLast ? '' : ' | '
-    }`;
-
     if ('key' in value) {
-      return `${value.key}: ${valueChangePart}`;
+      return `${value.key}: 0x${printNum(value.from, 16, 4)} -> 0x${printNum(value.to, 16, 4)}${
+        isLast ? '' : ' | '
+      }`;
     } else {
-      return `mx${printNum(value.address, 16, 5)}: ${valueChangePart}`;
+      return `mx${printNum(value.address, 16, 5)}: 0x${printNum(value.from, 16, 2)} -> 0x${printNum(
+        value.to,
+        16,
+        2,
+      )}${isLast ? '' : ' | '}`;
     }
   }
 }

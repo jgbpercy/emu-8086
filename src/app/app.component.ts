@@ -35,6 +35,8 @@ import { valueChangesWithInitial } from './value-changes-with-initial';
  * - Do segmentation properly?
  * - Ability to add more
  * - Add address to instruction view
+ * - Proper error handling
+ * - Improve perf!
  */
 
 @Component({
@@ -67,14 +69,14 @@ export class AppComponent {
     dx: 0,
 
     bp: 0,
-    sp: 0,
+    sp: 2 ** 16 - 1,
     si: 0,
     di: 0,
 
     cs: 0,
-    ds: 0,
-    es: 0,
-    ss: 0,
+    ds: 2 ** 12,
+    es: 2 ** 13,
+    ss: 2 ** 12 + 2 ** 13,
 
     ip: 0,
 

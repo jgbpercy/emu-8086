@@ -1,17 +1,13 @@
 import { DecodedInstruction, EffectiveAddressCalculation, RegisterOrEac } from './decoder';
 import { KeyOfType } from './key-of-type';
-import { Memory, ReadonlyMemory } from './memory';
+import { Memory, ReadonlyMemory, total8086MemorySizeInBytes } from './memory';
 import {
   Register,
   SegmentRegister,
   WordRegisterName,
-  bpReg,
-  bxReg,
-  diReg,
   isHigh8BitRegister,
   isWordRegister,
   mainRegisterTable,
-  siReg,
 } from './register-data';
 
 interface _SimulationStatePrimatives {
@@ -104,6 +100,33 @@ function simulateInstructionDiff(
         isWordRegister(instruction.op1),
         instruction.byteLength,
       );
+
+    case 'pushSegmentRegister': {
+      const newSp = state.sp - 2;
+
+      const stackAddress = getMemoryAddress(state, newSp, 'ss');
+
+      return [
+        makeNextInstructionDiff(state, instruction.byteLength),
+        { key: 'sp', from: state.sp, to: newSp },
+        ...makeSetMemoryValueDiffs(state, stackAddress, state[instruction.op1], true),
+      ];
+    }
+
+    case 'popSegmentRegister': {
+      const stackAddress = getMemoryAddress(state, state.sp, 'ss');
+
+      const value = state.memory.readWord(stackAddress);
+
+      return [
+        makeNextInstructionDiff(state, instruction.byteLength),
+        { key: 'sp', from: state.sp, to: state.sp + 2 },
+        { key: instruction.op1, from: state[instruction.op1], to: value },
+      ];
+    }
+
+    case 'orRegisterMemoryAndRegisterToEither':
+      return [];
 
     case 'subRegisterMemoryAndRegisterToEither': {
       const regOperand = getRegisterOperand(instruction);
@@ -256,9 +279,7 @@ function simulateInstructionDiff(
 
       return [
         makeNextInstructionDiff(state, instruction.byteLength),
-        dest.kind === 'reg'
-          ? makeSetRegisterValueDiff(state, dest, sourceValue)
-          : makeSetMemoryValueDiff(state, dest, sourceValue, word, 'ds'),
+        ...makeSetValueDiffs(state, dest, sourceValue, word, 'ds'),
       ];
     }
 
@@ -269,9 +290,7 @@ function simulateInstructionDiff(
 
       return [
         makeNextInstructionDiff(state, instruction.byteLength),
-        dest.kind === 'reg'
-          ? makeSetRegisterValueDiff(state, dest, sourceValue)
-          : makeSetMemoryValueDiff(state, dest, sourceValue, true, 'ds'),
+        ...makeSetValueDiffs(state, dest, sourceValue, true, 'ds'),
       ];
     }
 
@@ -301,9 +320,13 @@ function simulateInstructionDiff(
 
       return [
         makeNextInstructionDiff(state, instruction.byteLength),
-        dest.kind === 'reg'
-          ? makeSetRegisterValueDiff(state, dest, instruction.op2)
-          : makeSetMemoryValueDiff(state, dest, instruction.op2, dest.length === 2, 'ds'),
+        ...makeSetValueDiffs(
+          state,
+          dest,
+          instruction.op2,
+          instruction.op1.kind === 'mem' && instruction.op1.length === 2,
+          'ds',
+        ),
       ];
     }
 
@@ -409,9 +432,7 @@ function makeAddDiffs(
 
   return [
     makeNextInstructionDiff(state, instructionLength),
-    dest.kind === 'reg'
-      ? makeSetRegisterValueDiff(state, dest, result)
-      : makeSetMemoryValueDiff(state, dest, result, word, 'ds'),
+    ...makeSetValueDiffs(state, dest, result, word, 'ds'),
     ...makeFlagDiffsForArithmeticOp(state, result, overflow, sign, auxCarry, carry),
   ];
 }
@@ -427,9 +448,7 @@ function makeSubDiffs(
 
   return [
     makeNextInstructionDiff(state, instructionLength),
-    dest.kind === 'reg'
-      ? makeSetRegisterValueDiff(state, dest, result)
-      : makeSetMemoryValueDiff(state, dest, sourceValue, word, 'ds'),
+    ...makeSetValueDiffs(state, dest, result, word, 'ds'),
     ...flagDiffs,
   ];
 }
@@ -505,7 +524,7 @@ function getRegisterOrEacValue(
   if (registerOrEac.kind === 'reg') {
     return getRegisterValue(state, registerOrEac);
   } else {
-    return getMemoryValue(state, registerOrEac, word, defaultSegment);
+    return getMemoryValueFromEac(state, registerOrEac, word, defaultSegment);
   }
 }
 
@@ -523,18 +542,18 @@ function getRegisterValue(state: ReadonlySimulationState, register: Register): n
   }
 }
 
-function getMemoryValue(
+function getMemoryValueFromEac(
   state: ReadonlySimulationState,
   eac: EffectiveAddressCalculation,
   word: boolean,
   defaultSegment: SegmentRegister,
 ): number {
-  const address = getMemoryAddress(state, eac, defaultSegment);
+  const address = getMemoryAddressFromEac(state, eac, defaultSegment);
 
   return word ? state.memory.readWord(address) : state.memory.readByte(address);
 }
 
-function getMemoryAddress(
+function getMemoryAddressFromEac(
   state: ReadonlySimulationState,
   eac: EffectiveAddressCalculation,
   defaultSegment: SegmentRegister,
@@ -542,28 +561,28 @@ function getMemoryAddress(
   let addressFromRegigsterPart: number;
   switch (eac.calculationKind) {
     case 'bx + si':
-      addressFromRegigsterPart = getRegisterValue(state, bxReg) + getRegisterValue(state, siReg);
+      addressFromRegigsterPart = state.bx + state.si;
       break;
     case 'bx + di':
-      addressFromRegigsterPart = getRegisterValue(state, bxReg) + getRegisterValue(state, diReg);
+      addressFromRegigsterPart = state.bx + state.di;
       break;
     case 'bp + si':
-      addressFromRegigsterPart = getRegisterValue(state, bpReg) + getRegisterValue(state, siReg);
+      addressFromRegigsterPart = state.bp + state.si;
       break;
     case 'bp + di':
-      addressFromRegigsterPart = getRegisterValue(state, bpReg) + getRegisterValue(state, diReg);
+      addressFromRegigsterPart = state.bp + state.di;
       break;
     case 'si':
-      addressFromRegigsterPart = getRegisterValue(state, siReg);
+      addressFromRegigsterPart = state.si;
       break;
     case 'di':
-      addressFromRegigsterPart = getRegisterValue(state, diReg);
+      addressFromRegigsterPart = state.di;
       break;
     case 'bp':
-      addressFromRegigsterPart = getRegisterValue(state, bpReg);
+      addressFromRegigsterPart = state.bp;
       break;
     case 'bx':
-      addressFromRegigsterPart = getRegisterValue(state, bxReg);
+      addressFromRegigsterPart = state.bx;
       break;
     case 'DIRECT ADDRESS':
       addressFromRegigsterPart = 0;
@@ -572,9 +591,35 @@ function getMemoryAddress(
 
   const segmentRegister = eac.segmentOverridePrefix ?? defaultSegment;
 
+  return getMemoryAddress(
+    state,
+    addressFromRegigsterPart + (eac.displacement ?? 0),
+    segmentRegister,
+  );
+}
+
+function getMemoryAddress(
+  state: ReadonlySimulationState,
+  addressInSegment: number,
+  segmentRegister: SegmentRegister,
+): number {
   const segmentValue = state[segmentRegister];
 
-  return (segmentValue << 4) + (addressFromRegigsterPart + (eac.displacement ?? 0));
+  return ((segmentValue << 4) + addressInSegment) % total8086MemorySizeInBytes;
+}
+
+function* makeSetValueDiffs(
+  state: ReadonlySimulationState,
+  dest: RegisterOrEac,
+  value: number,
+  wordIfMemoryDest: boolean,
+  defaultSegment: SegmentRegister,
+): Generator<SimulationStatePropertyDiff> {
+  if (dest.kind === 'reg') {
+    yield makeSetRegisterValueDiff(state, dest, value);
+  } else {
+    yield* makeSetMemoryValueDiffsFromEac(state, dest, value, wordIfMemoryDest, defaultSegment);
+  }
 }
 
 function makeSetRegisterValueDiff(
@@ -605,20 +650,46 @@ function makeSetRegisterValueDiff(
   };
 }
 
-function makeSetMemoryValueDiff(
+function* makeSetMemoryValueDiffsFromEac(
   state: ReadonlySimulationState,
   eac: EffectiveAddressCalculation,
   value: number,
   word: boolean,
   defaultSegment: SegmentRegister,
-): SimulationStatePropertyDiff {
-  const address = getMemoryAddress(state, eac, defaultSegment);
+): Generator<SimulationStatePropertyDiff> {
+  const address = getMemoryAddressFromEac(state, eac, defaultSegment);
 
-  return {
-    address,
-    from: word ? state.memory.readWord(address) : state.memory.readByte(address),
-    to: value,
-  };
+  yield* makeSetMemoryValueDiffs(state, address, value, word);
+}
+
+function* makeSetMemoryValueDiffs(
+  state: ReadonlySimulationState,
+  address: number,
+  value: number,
+  word: boolean,
+): Generator<SimulationStatePropertyDiff> {
+  if (word) {
+    const leastSignificantByte = value & 0x00ff;
+    const mostSignificantByte = (value & 0xff00) >> 8;
+
+    yield {
+      address: address + 1,
+      from: state.memory.readByte(address + 1),
+      to: mostSignificantByte,
+    };
+
+    yield {
+      address,
+      from: state.memory.readByte(address),
+      to: leastSignificantByte,
+    };
+  } else {
+    yield {
+      address,
+      from: state.memory.readByte(address),
+      to: value,
+    };
+  }
 }
 
 function* makeFlagDiffsForArithmeticOp(
