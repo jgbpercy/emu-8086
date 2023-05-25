@@ -5,6 +5,7 @@ import {
   Register,
   SegmentRegister,
   WordRegisterName,
+  axReg,
   isHigh8BitRegister,
   isWordRegister,
   mainRegisterTable,
@@ -125,8 +126,99 @@ function simulateInstructionDiff(
       ];
     }
 
-    case 'orRegisterMemoryAndRegisterToEither':
-      return [];
+    case 'orRegisterMemoryAndRegisterToEither': {
+      const regOperand = getRegisterOperand(instruction);
+
+      const word = isWordRegister(regOperand);
+
+      const sourceValue = getRegisterOrEacValue(state, instruction.op2, word, 'ds');
+
+      return makeOrDiffs(state, instruction.op1, sourceValue, word, instruction.byteLength);
+    }
+
+    case 'orImmediateToAccumulator':
+      return makeOrDiffs(
+        state,
+        instruction.op1,
+        instruction.op2,
+        isWordRegister(instruction.op1),
+        instruction.byteLength,
+      );
+
+    case 'adcRegisterMemoryWithRegisterToEither': {
+      const regOperand = getRegisterOperand(instruction);
+
+      const word = isWordRegister(regOperand);
+
+      const carry = state.carryFlag ? 1 : 0;
+
+      const sourceValueWithCarry =
+        getRegisterOrEacValue(state, instruction.op2, word, 'ds') + carry;
+
+      return makeAddDiffs(
+        state,
+        instruction.op1,
+        sourceValueWithCarry,
+        word,
+        instruction.byteLength,
+      );
+    }
+
+    case 'adcImmediateToAccumulator':
+      return makeAddDiffs(
+        state,
+        instruction.op1,
+        instruction.op2 + (state.carryFlag ? 1 : 0),
+        isWordRegister(instruction.op1),
+        instruction.byteLength,
+      );
+
+    case 'sbbRegisterMemoryAndRegisterToEither': {
+      const regOperand = getRegisterOperand(instruction);
+
+      const word = isWordRegister(regOperand);
+
+      const carry = state.carryFlag ? 1 : 0;
+
+      const sourceValueWithCarry =
+        getRegisterOrEacValue(state, instruction.op2, word, 'ds') - carry;
+
+      return makeSubDiffs(
+        state,
+        instruction.op1,
+        sourceValueWithCarry,
+        word,
+        instruction.byteLength,
+      );
+    }
+
+    case 'sbbImmediateFromAccumulator':
+      return makeSubDiffs(
+        state,
+        instruction.op1,
+        instruction.op2 - (state.carryFlag ? 1 : 0),
+        isWordRegister(instruction.op1),
+        instruction.byteLength,
+      );
+
+    case 'andRegisterMemoryWithRegisterToEither': {
+      const regOperand = getRegisterOperand(instruction);
+
+      const word = isWordRegister(regOperand);
+
+      const sourceValue = getRegisterOrEacValue(state, instruction.op2, word, 'ds');
+
+      return makeAndDiffs(state, instruction.op1, sourceValue, word, instruction.byteLength);
+    }
+
+    case 'andImmediateToAccumulator':
+      return makeAndDiffs(
+        state,
+        instruction.op1,
+        instruction.op2,
+        isWordRegister(instruction.op1),
+        instruction.byteLength,
+      );
 
     case 'subRegisterMemoryAndRegisterToEither': {
       const regOperand = getRegisterOperand(instruction);
@@ -136,6 +228,37 @@ function simulateInstructionDiff(
       const sourceValue = getRegisterOrEacValue(state, instruction.op2, word, 'ds');
 
       return makeSubDiffs(state, instruction.op1, sourceValue, word, instruction.byteLength);
+    }
+
+    // https://www.righto.com/2023/01/understanding-x86s-decimal-adjust-after.html
+    case 'daaDecimalAdjustForAdd': {
+      const alLowNibble = state.ax && 0x000f;
+
+      let alResult = state.ax & 0x00ff;
+      let setAuxCarry = false;
+      let setCarry = false;
+
+      if (alLowNibble >= 10 || state.auxCarryFlag) {
+        alResult += 6;
+        setAuxCarry = true;
+      }
+
+      if (alResult > 0x99 || state.carryFlag) {
+        alResult += 0x60;
+        setCarry = true;
+      }
+
+      const result = (state.ax & 0xff00) + alResult;
+
+      return [
+        makeNextInstructionDiff(state, instruction.byteLength),
+        makeSetRegisterValueDiff(state, axReg, result),
+        makeSetSignFlagDiff(state, result, false),
+        makeSetZeroFlagDiff(state, result),
+        makeSetFlagDiff(state, 'auxCarryFlag', setAuxCarry),
+        makeSetParityFlagDiff(state, result),
+        makeSetFlagDiff(state, 'carryFlag', setCarry),
+      ];
     }
 
     case 'subImmediateFromAccumulator':
@@ -301,11 +424,7 @@ function simulateInstructionDiff(
 
       return [
         makeNextInstructionDiff(state, instruction.byteLength),
-        {
-          key: instruction.op1,
-          from: state[instruction.op1],
-          to: sourceValue,
-        },
+        makeSetNumberDiff(state, instruction.op1, sourceValue),
       ];
     }
 
@@ -341,7 +460,7 @@ function simulateInstructionDiff(
 
     case 'jcxzJumpOnCxZero':
       return state.cx === 0
-        ? [{ key: 'ip', from: state.ip, to: state.ip + instruction.byteLength + instruction.op1 }]
+        ? [makeSetNumberDiff(state, 'ip', state.ip + instruction.byteLength + instruction.op1)]
         : [makeNextInstructionDiff(state, instruction.byteLength)];
 
     default:
@@ -369,17 +488,9 @@ function makeLoopDiff(
 ): SimulationStateDiff {
   return [
     condition
-      ? {
-          key: 'ip',
-          from: state.ip,
-          to: state.ip + instruction.byteLength + instruction.op1,
-        }
+      ? makeSetNumberDiff(state, 'ip', state.ip + instruction.byteLength + instruction.op1)
       : makeNextInstructionDiff(state, instruction.byteLength),
-    {
-      key: 'cx',
-      from: state.cx,
-      to: state.cx - 1,
-    },
+    makeSetNumberDiff(state, 'cx', state.cx - 1),
   ];
 }
 
@@ -389,7 +500,7 @@ function makeShortLabelJumpDiff(
   condition: boolean,
 ): SimulationStateDiff {
   return condition
-    ? [{ key: 'ip', from: state.ip, to: state.ip + instruction.byteLength + instruction.op1 }]
+    ? [makeSetNumberDiff(state, 'ip', state.ip + instruction.byteLength + instruction.op1)]
     : [makeNextInstructionDiff(state, instruction.byteLength)];
 }
 
@@ -408,9 +519,7 @@ function makeAddDiffs(
 
   const max = word ? 65536 : 128;
 
-  let overflow = false;
   let carry = false;
-  let sign = false;
 
   if (result >= max) {
     carry = true;
@@ -418,22 +527,48 @@ function makeAddDiffs(
 
   result = result % max;
 
-  const destSignBit = destValue >= max / 2;
-  const sourceSignBit = sourceValue >= max / 2;
-  const resultSignBit = result >= max / 2;
-
-  if (destSignBit !== resultSignBit && destSignBit === sourceSignBit) {
-    overflow = true;
-  }
-
-  if ((result & (max / 2)) !== 0) {
-    sign = true;
-  }
+  const overflow = getOverflowFlag(destValue, sourceValue, result, max);
 
   return [
     makeNextInstructionDiff(state, instructionLength),
     ...makeSetValueDiffs(state, dest, result, word, 'ds'),
-    ...makeFlagDiffsForArithmeticOp(state, result, overflow, sign, auxCarry, carry),
+    ...makeFlagDiffsForArithmeticOp(state, result, overflow, word, auxCarry, carry),
+  ];
+}
+
+function makeOrDiffs(
+  state: ReadonlySimulationState,
+  dest: RegisterOrEac,
+  sourceValue: number,
+  word: boolean,
+  instructionLength: number,
+): SimulationStateDiff {
+  const destValue = getRegisterOrEacValue(state, dest, word, 'ds');
+
+  const result = destValue | sourceValue;
+
+  return [
+    makeNextInstructionDiff(state, instructionLength),
+    ...makeSetValueDiffs(state, dest, result, word, 'ds'),
+    ...makeFlagDiffsForLogicalOp(state, result, word),
+  ];
+}
+
+function makeAndDiffs(
+  state: ReadonlySimulationState,
+  dest: RegisterOrEac,
+  sourceValue: number,
+  word: boolean,
+  instructionLength: number,
+): SimulationStateDiff {
+  const destValue = getRegisterOrEacValue(state, dest, word, 'ds');
+
+  const result = destValue & sourceValue;
+
+  return [
+    makeNextInstructionDiff(state, instructionLength),
+    ...makeSetValueDiffs(state, dest, result, word, 'ds'),
+    ...makeFlagDiffsForLogicalOp(state, result, word),
   ];
 }
 
@@ -483,8 +618,6 @@ function makeSubOrCmpResults(
   const max = word ? 65536 : 128;
 
   let carry = false;
-  let overflow = false;
-  let sign = false;
 
   if (result < 0) {
     carry = true;
@@ -496,23 +629,26 @@ function makeSubOrCmpResults(
     result += max;
   }
 
+  const overflow = getOverflowFlag(destValue, sourceValue, result, max);
+
+  return {
+    result,
+    flagDiffs: makeFlagDiffsForArithmeticOp(state, result, overflow, word, auxCarry, carry),
+  };
+}
+
+// https://en.wikipedia.org/wiki/Overflow_flag
+function getOverflowFlag(
+  destValue: number,
+  sourceValue: number,
+  result: number,
+  max: 128 | 65536,
+): boolean {
   const destSignBit = destValue >= max / 2;
   const sourceSignBit = sourceValue >= max / 2;
   const resultSignBit = result >= max / 2;
 
-  // https://en.wikipedia.org/wiki/Overflow_flag
-  if (resultSignBit !== destSignBit && sourceSignBit !== destSignBit) {
-    overflow = true;
-  }
-
-  if ((result & (max / 2)) !== 0) {
-    sign = true;
-  }
-
-  return {
-    result,
-    flagDiffs: makeFlagDiffsForArithmeticOp(state, result, overflow, sign, auxCarry, carry),
-  };
+  return resultSignBit !== destSignBit && sourceSignBit !== destSignBit;
 }
 
 function getRegisterOrEacValue(
@@ -643,11 +779,14 @@ function makeSetRegisterValueDiff(
     }
   }
 
-  return {
-    key: mainRegister,
-    from: state[mainRegister],
-    to: newValue,
-  };
+  return makeSetNumberDiff(state, mainRegister, newValue);
+}
+
+function makeNextInstructionDiff(
+  state: ReadonlySimulationState,
+  currentInstructionLength: number,
+): SimulationStatePropertyDiff {
+  return makeSetNumberDiff(state, 'ip', state.ip + currentInstructionLength);
 }
 
 function* makeSetMemoryValueDiffsFromEac(
@@ -672,85 +811,109 @@ function* makeSetMemoryValueDiffs(
     const leastSignificantByte = value & 0x00ff;
     const mostSignificantByte = (value & 0xff00) >> 8;
 
-    yield {
-      address: address + 1,
-      from: state.memory.readByte(address + 1),
-      to: mostSignificantByte,
-    };
-
-    yield {
-      address,
-      from: state.memory.readByte(address),
-      to: leastSignificantByte,
-    };
+    yield makeSetMemoryValueDiff(state, address + 1, mostSignificantByte);
+    yield makeSetMemoryValueDiff(state, address, leastSignificantByte);
   } else {
-    yield {
-      address,
-      from: state.memory.readByte(address),
-      to: value,
-    };
+    yield makeSetMemoryValueDiff(state, address, value);
   }
+}
+
+function* makeFlagDiffsForLogicalOp(
+  state: ReadonlySimulationState,
+  result: number,
+  word: boolean,
+): Generator<SimulationStatePropertyDiff> {
+  yield makeSetFlagDiff(state, 'overflowFlag', false);
+  yield makeSetSignFlagDiff(state, result, word);
+  yield makeSetZeroFlagDiff(state, result);
+  yield makeSetParityFlagDiff(state, result);
+  yield makeSetFlagDiff(state, 'carryFlag', false);
 }
 
 function* makeFlagDiffsForArithmeticOp(
   state: ReadonlySimulationState,
   result: number,
   overflow: boolean,
-  sign: boolean,
+  word: boolean,
   auxCarry: boolean,
   carry: boolean,
 ): Generator<SimulationStatePropertyDiff> {
-  yield {
-    key: 'overflowFlag',
-    from: state.overflowFlag,
-    to: overflow,
-  };
+  yield makeSetFlagDiff(state, 'overflowFlag', overflow);
+  yield makeSetSignFlagDiff(state, result, word);
+  yield makeSetZeroFlagDiff(state, result);
+  yield makeSetFlagDiff(state, 'auxCarryFlag', auxCarry);
+  yield makeSetParityFlagDiff(state, result);
+  yield makeSetFlagDiff(state, 'carryFlag', carry);
+}
 
-  yield {
-    key: 'signFlag',
-    from: state.signFlag,
-    to: sign,
-  };
+function makeSetZeroFlagDiff(
+  state: ReadonlySimulationState,
+  result: number,
+): SimulationStatePropertyDiff {
+  return makeSetFlagDiff(state, 'zeroFlag', result === 0);
+}
 
-  yield {
-    key: 'zeroFlag',
-    from: state.zeroFlag,
-    to: result === 0,
-  };
+function makeSetSignFlagDiff(
+  state: ReadonlySimulationState,
+  result: number,
+  word: boolean,
+): SimulationStatePropertyDiff {
+  const max = word ? 65536 : 128;
+  const value = (result & (max / 2)) !== 0;
 
-  yield {
-    key: 'auxCarryFlag',
-    from: state.auxCarryFlag,
-    to: auxCarry,
-  };
+  return makeSetFlagDiff(state, 'signFlag', value);
+}
 
-  // https://medium.com/free-code-camp/algorithmic-problem-solving-efficiently-computing-the-parity-of-a-stream-of-numbers-cd652af14643
+// https://medium.com/free-code-camp/algorithmic-problem-solving-efficiently-computing-the-parity-of-a-stream-of-numbers-cd652af14643
+function makeSetParityFlagDiff(
+  state: ReadonlySimulationState,
+  result: number,
+): SimulationStatePropertyDiff {
   let parityCheckResult = result & 0xff;
   parityCheckResult ^= parityCheckResult >> 4;
   parityCheckResult ^= parityCheckResult >> 2;
   parityCheckResult ^= parityCheckResult >> 1;
 
-  yield {
+  return {
     key: 'parityFlag',
     from: state.parityFlag,
     to: !(parityCheckResult & 1),
   };
+}
 
-  yield {
-    key: 'carryFlag',
-    from: state.carryFlag,
-    to: carry,
+function makeSetFlagDiff(
+  state: ReadonlySimulationState,
+  flag: KeyOfType<ReadonlySimulationState, boolean>,
+  value: boolean,
+): GenericSimulationStatePropertyDiff<boolean> {
+  return {
+    key: flag,
+    from: state[flag],
+    to: value,
   };
 }
 
-function makeNextInstructionDiff(
+function makeSetNumberDiff(
   state: ReadonlySimulationState,
-  currentInstructionLength: number,
-): SimulationStatePropertyDiff {
+  key: KeyOfType<ReadonlySimulationState, number>,
+  value: number,
+): GenericSimulationStatePropertyDiff<number> {
   return {
-    key: 'ip',
-    from: state.ip,
-    to: state.ip + currentInstructionLength,
+    key,
+    from: state[key],
+    to: value,
+  };
+}
+
+function makeSetMemoryValueDiff(
+  state: ReadonlySimulationState,
+  address: number,
+  value: number,
+): MemoryDiff {
+  return {
+    address,
+    from: state.memory.readByte(address),
+    to: value,
   };
 }
 
