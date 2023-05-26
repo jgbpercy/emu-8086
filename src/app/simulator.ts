@@ -102,29 +102,11 @@ function simulateInstructionDiff(
         instruction.byteLength,
       );
 
-    case 'pushSegmentRegister': {
-      const newSp = state.sp - 2;
+    case 'pushSegmentRegister':
+      return makePushDiffs(state, instruction.op1, instruction.byteLength);
 
-      const stackAddress = getMemoryAddress(state, newSp, 'ss');
-
-      return [
-        makeNextInstructionDiff(state, instruction.byteLength),
-        { key: 'sp', from: state.sp, to: newSp },
-        ...makeSetMemoryValueDiffs(state, stackAddress, state[instruction.op1], true),
-      ];
-    }
-
-    case 'popSegmentRegister': {
-      const stackAddress = getMemoryAddress(state, state.sp, 'ss');
-
-      const value = state.memory.readWord(stackAddress);
-
-      return [
-        makeNextInstructionDiff(state, instruction.byteLength),
-        { key: 'sp', from: state.sp, to: state.sp + 2 },
-        { key: instruction.op1, from: state[instruction.op1], to: value },
-      ];
-    }
+    case 'popSegmentRegister':
+      return makePopDiffs(state, instruction.op1, instruction.byteLength);
 
     case 'orRegisterMemoryAndRegisterToEither': {
       const regOperand = getRegisterOperand(instruction);
@@ -181,7 +163,7 @@ function simulateInstructionDiff(
       const carry = state.carryFlag ? 1 : 0;
 
       const sourceValueWithCarry =
-        getRegisterOrEacValue(state, instruction.op2, word, 'ds') - carry;
+        getRegisterOrEacValue(state, instruction.op2, word, 'ds') + carry;
 
       return makeSubDiffs(
         state,
@@ -196,7 +178,7 @@ function simulateInstructionDiff(
       return makeSubDiffs(
         state,
         instruction.op1,
-        instruction.op2 - (state.carryFlag ? 1 : 0),
+        instruction.op2 + (state.carryFlag ? 1 : 0),
         isWordRegister(instruction.op1),
         instruction.byteLength,
       );
@@ -220,6 +202,40 @@ function simulateInstructionDiff(
         instruction.byteLength,
       );
 
+    // https://www.righto.com/2023/01/understanding-x86s-decimal-adjust-after.html
+    case 'daaDecimalAdjustForAdd': {
+      const alLowNibbleValue = state.ax & 0x000f;
+      const alValue = state.ax & 0x00ff;
+
+      let alResult = alValue;
+      let setAuxCarry = false;
+      let setCarry = false;
+
+      if (alLowNibbleValue > 9 || state.auxCarryFlag) {
+        alResult += 6;
+        setAuxCarry = true;
+      }
+
+      if (alValue > 0x99 || state.carryFlag) {
+        alResult += 0x60;
+        setCarry = true;
+      }
+
+      alResult = alResult % 256;
+
+      const result = (state.ax & 0xff00) + alResult;
+
+      return [
+        makeNextInstructionDiff(state, instruction.byteLength),
+        makeSetRegisterValueDiff(state, axReg, result),
+        makeSetSignFlagDiff(state, result, false),
+        makeSetZeroFlagDiff(state, result),
+        makeSetFlagDiff(state, 'auxCarryFlag', setAuxCarry),
+        makeSetParityFlagDiff(state, result),
+        makeSetFlagDiff(state, 'carryFlag', setCarry),
+      ];
+    }
+
     case 'subRegisterMemoryAndRegisterToEither': {
       const regOperand = getRegisterOperand(instruction);
 
@@ -230,21 +246,31 @@ function simulateInstructionDiff(
       return makeSubDiffs(state, instruction.op1, sourceValue, word, instruction.byteLength);
     }
 
-    // https://www.righto.com/2023/01/understanding-x86s-decimal-adjust-after.html
-    case 'daaDecimalAdjustForAdd': {
-      const alLowNibble = state.ax && 0x000f;
+    case 'subImmediateFromAccumulator':
+      return makeSubDiffs(
+        state,
+        instruction.op1,
+        instruction.op2,
+        isWordRegister(instruction.op1),
+        instruction.byteLength,
+      );
 
-      let alResult = state.ax & 0x00ff;
+    // https://pdos.csail.mit.edu/6.828/2005/readings/i386/DAS.htm
+    case 'dasDecimalAdjustForSubtract': {
+      const alLowNibbleValue = state.ax & 0x000f;
+      const alValue = state.ax & 0x00ff;
+
+      let alResult = alValue;
       let setAuxCarry = false;
       let setCarry = false;
 
-      if (alLowNibble >= 10 || state.auxCarryFlag) {
-        alResult += 6;
+      if (alLowNibbleValue > 9 || state.auxCarryFlag) {
+        alResult -= 6;
         setAuxCarry = true;
       }
 
-      if (alResult > 0x99 || state.carryFlag) {
-        alResult += 0x60;
+      if (alValue > 0x99 || state.carryFlag) {
+        alResult -= 0x60;
         setCarry = true;
       }
 
@@ -261,14 +287,47 @@ function simulateInstructionDiff(
       ];
     }
 
-    case 'subImmediateFromAccumulator':
-      return makeSubDiffs(
+    case 'xorRegisterMemoryAndRegisterToEither': {
+      const regOperand = getRegisterOperand(instruction);
+
+      const word = isWordRegister(regOperand);
+
+      const sourceValue = getRegisterOrEacValue(state, instruction.op2, word, 'ds');
+
+      return makeXorDiffs(state, instruction.op1, sourceValue, word, instruction.byteLength);
+    }
+
+    case 'xorImmediateToAccumulator':
+      return makeXorDiffs(
         state,
         instruction.op1,
         instruction.op2,
         isWordRegister(instruction.op1),
         instruction.byteLength,
       );
+
+    case 'aaaAsciiAdjustForAdd': {
+      const alLowNibbleValue = state.ax & 0x000f;
+
+      let setCarries = false;
+      let alResult = alLowNibbleValue;
+      let ahResult = state.ax & 0xff00;
+
+      if (alLowNibbleValue > 9 || state.auxCarryFlag) {
+        alResult += 6;
+        ahResult += 256;
+        setCarries = true;
+      }
+
+      const result = (ahResult & alResult & 0xff0f) % 65536;
+
+      return [
+        makeNextInstructionDiff(state, instruction.byteLength),
+        makeSetRegisterValueDiff(state, axReg, result),
+        makeSetFlagDiff(state, 'auxCarryFlag', setCarries),
+        makeSetFlagDiff(state, 'carryFlag', setCarries),
+      ];
+    }
 
     case 'cmpRegisterMemoryAndRegister': {
       const regOperand = getRegisterOperand(instruction);
@@ -288,6 +347,59 @@ function simulateInstructionDiff(
         isWordRegister(instruction.op1),
         instruction.byteLength,
       );
+
+    case 'aasAsciiAdjustForSubtract': {
+      const alLowNibbleValue = state.ax & 0x000f;
+
+      let setCarries = false;
+      let alResult = alLowNibbleValue;
+      let ahResult = state.ax & 0xff00;
+
+      if (alLowNibbleValue > 9 || state.auxCarryFlag) {
+        alResult -= 6;
+        ahResult -= 256;
+
+        if (ahResult < 0) {
+          ahResult += 65536;
+        }
+
+        setCarries = true;
+      }
+
+      const result = ahResult & alResult & 0xff0f;
+
+      return [
+        makeNextInstructionDiff(state, instruction.byteLength),
+        makeSetRegisterValueDiff(state, axReg, result),
+        makeSetFlagDiff(state, 'auxCarryFlag', setCarries),
+        makeSetFlagDiff(state, 'carryFlag', setCarries),
+      ];
+    }
+
+    case 'incRegister':
+      return makeAddDiffs(
+        state,
+        instruction.op1,
+        1,
+        isWordRegister(instruction.op1),
+        instruction.byteLength,
+        false,
+      );
+
+    case 'decRegister':
+      return makeSubDiffs(
+        state,
+        instruction.op1,
+        1,
+        isWordRegister(instruction.op1),
+        instruction.byteLength,
+      );
+
+    case 'pushRegister':
+      return makePushDiffs(state, instruction.op1.name, instruction.byteLength);
+
+    case 'popRegister':
+      return makePopDiffs(state, instruction.op1.name, instruction.byteLength);
 
     case 'joJumpOnOverflow':
       return makeShortLabelJumpDiff(state, instruction, state.overflowFlag);
@@ -355,40 +467,113 @@ function simulateInstructionDiff(
         !(state.overflowFlag !== state.signFlag || state.zeroFlag),
       );
 
-    case 'addImmediateToRegisterMemory': {
-      const dest = instruction.op1;
+    case 'addImmediateToRegisterMemory':
+      return makeAddDiffs(
+        state,
+        instruction.op1,
+        sanitize8BitSignExtendedNegatives(instruction.op2),
+        getWordFromRegisterOrEac(instruction.op1),
+        instruction.byteLength,
+      );
+
+    case 'orImmediateToRegisterMemory':
+      return makeOrDiffs(
+        state,
+        instruction.op1,
+        sanitize8BitSignExtendedNegatives(instruction.op2),
+        getWordFromRegisterOrEac(instruction.op1),
+        instruction.byteLength,
+      );
+
+    case 'adcImmediateToRegisterMemory': {
+      const carry = state.carryFlag ? 1 : 0;
 
       return makeAddDiffs(
         state,
-        dest,
-        sanitize8BitSignExtendedNegatives(instruction.op2),
-        dest.kind === 'reg' ? isWordRegister(dest) : dest.length === 2,
+        instruction.op1,
+        sanitize8BitSignExtendedNegatives(instruction.op2) + carry,
+        getWordFromRegisterOrEac(instruction.op1),
         instruction.byteLength,
       );
     }
 
-    case 'subImmediateToRegisterMemory': {
-      const dest = instruction.op1;
+    case 'sbbImmediateToRegisterMemory': {
+      const carry = state.carryFlag ? 1 : 0;
 
       return makeSubDiffs(
         state,
-        dest,
-        sanitize8BitSignExtendedNegatives(instruction.op2),
-        dest.kind === 'reg' ? isWordRegister(dest) : dest.length === 2,
+        instruction.op1,
+        sanitize8BitSignExtendedNegatives(instruction.op2) + carry,
+        getWordFromRegisterOrEac(instruction.op1),
         instruction.byteLength,
       );
     }
 
-    case 'cmpImmediateToRegisterMemory': {
-      const dest = instruction.op1;
-
-      return makeCmpDiffs(
+    case 'andImmediateToRegisterMemory':
+      return makeAndDiffs(
         state,
-        dest,
+        instruction.op1,
         sanitize8BitSignExtendedNegatives(instruction.op2),
-        dest.kind === 'reg' ? isWordRegister(dest) : dest.length === 2,
+        getWordFromRegisterOrEac(instruction.op1),
         instruction.byteLength,
       );
+
+    case 'subImmediateToRegisterMemory':
+      return makeSubDiffs(
+        state,
+        instruction.op1,
+        sanitize8BitSignExtendedNegatives(instruction.op2),
+        getWordFromRegisterOrEac(instruction.op1),
+        instruction.byteLength,
+      );
+
+    case 'xorImmediateToRegisterMemory':
+      return makeXorDiffs(
+        state,
+        instruction.op1,
+        sanitize8BitSignExtendedNegatives(instruction.op2),
+        getWordFromRegisterOrEac(instruction.op1),
+        instruction.byteLength,
+      );
+
+    case 'cmpImmediateToRegisterMemory':
+      return makeCmpDiffs(
+        state,
+        instruction.op1,
+        sanitize8BitSignExtendedNegatives(instruction.op2),
+        getWordFromRegisterOrEac(instruction.op1),
+        instruction.byteLength,
+      );
+
+    case 'testRegisterMemoryAndRegister': {
+      const regOperand = getRegisterOperand(instruction);
+
+      const word = isWordRegister(regOperand);
+
+      const sourceValue = getRegisterOrEacValue(state, instruction.op2, word, 'ds');
+
+      return makeTestDiffs(state, instruction.op1, sourceValue, word, instruction.byteLength);
+    }
+
+    case 'xchgRegisterMemoryWithRegister': {
+      let registerOperand: Register;
+      let otherOperand: RegisterOrEac;
+
+      if (instruction.op1.kind === 'reg') {
+        registerOperand = instruction.op1;
+        otherOperand = instruction.op2;
+      } else {
+        if (instruction.op2.kind !== 'reg') {
+          throw Error('Internal Error - Two memory operands?');
+        }
+
+        registerOperand = instruction.op2;
+        otherOperand = instruction.op1;
+      }
+
+      const word = isWordRegister(registerOperand);
+
+      return makeXchgDiffs(state, registerOperand, otherOperand, word, instruction.byteLength);
     }
 
     case 'movRegisterMemoryToFromRegister': {
@@ -402,7 +587,7 @@ function simulateInstructionDiff(
 
       return [
         makeNextInstructionDiff(state, instruction.byteLength),
-        ...makeSetValueDiffs(state, dest, sourceValue, word, 'ds'),
+        ...makeSetRegisterOrMemoryValueDiffs(state, dest, sourceValue, word, 'ds'),
       ];
     }
 
@@ -413,7 +598,16 @@ function simulateInstructionDiff(
 
       return [
         makeNextInstructionDiff(state, instruction.byteLength),
-        ...makeSetValueDiffs(state, dest, sourceValue, true, 'ds'),
+        ...makeSetRegisterOrMemoryValueDiffs(state, dest, sourceValue, true, 'ds'),
+      ];
+    }
+
+    case 'leaLoadEaToRegister': {
+      const sourceValue = getOffsetFromEac(state, instruction.op2);
+
+      return [
+        makeNextInstructionDiff(state, instruction.byteLength),
+        makeSetRegisterValueDiff(state, instruction.op1, sourceValue),
       ];
     }
 
@@ -428,6 +622,12 @@ function simulateInstructionDiff(
       ];
     }
 
+    case 'popRegisterMemory':
+      return makePopDiffs(state, instruction.op1, instruction.byteLength);
+
+    case 'xchgRegisterWithAccumulator':
+      return makeXchgDiffs(state, instruction.op1, instruction.op2, true, instruction.byteLength);
+
     case 'movImmediateToRegister':
       return [
         makeNextInstructionDiff(state, instruction.byteLength),
@@ -439,7 +639,7 @@ function simulateInstructionDiff(
 
       return [
         makeNextInstructionDiff(state, instruction.byteLength),
-        ...makeSetValueDiffs(
+        ...makeSetRegisterOrMemoryValueDiffs(
           state,
           dest,
           instruction.op2,
@@ -481,6 +681,10 @@ function getRegisterOperand(instruction: {
   return regOperand;
 }
 
+function getWordFromRegisterOrEac(registerOrEac: RegisterOrEac): boolean {
+  return registerOrEac.kind === 'reg' ? isWordRegister(registerOrEac) : registerOrEac.length === 2;
+}
+
 function makeLoopDiff(
   state: ReadonlySimulationState,
   instruction: { op1: number; byteLength: number },
@@ -510,6 +714,7 @@ function makeAddDiffs(
   sourceValue: number,
   word: boolean,
   instructionLength: number,
+  updateCarry = true,
 ): SimulationStateDiff {
   const destValue = getRegisterOrEacValue(state, dest, word, 'ds');
 
@@ -519,10 +724,10 @@ function makeAddDiffs(
 
   const max = word ? 65536 : 128;
 
-  let carry = false;
+  let carry: boolean | undefined = undefined;
 
-  if (result >= max) {
-    carry = true;
+  if (updateCarry) {
+    carry = result >= max;
   }
 
   result = result % max;
@@ -531,7 +736,7 @@ function makeAddDiffs(
 
   return [
     makeNextInstructionDiff(state, instructionLength),
-    ...makeSetValueDiffs(state, dest, result, word, 'ds'),
+    ...makeSetRegisterOrMemoryValueDiffs(state, dest, result, word, 'ds'),
     ...makeFlagDiffsForArithmeticOp(state, result, overflow, word, auxCarry, carry),
   ];
 }
@@ -549,7 +754,7 @@ function makeOrDiffs(
 
   return [
     makeNextInstructionDiff(state, instructionLength),
-    ...makeSetValueDiffs(state, dest, result, word, 'ds'),
+    ...makeSetRegisterOrMemoryValueDiffs(state, dest, result, word, 'ds'),
     ...makeFlagDiffsForLogicalOp(state, result, word),
   ];
 }
@@ -561,13 +766,60 @@ function makeAndDiffs(
   word: boolean,
   instructionLength: number,
 ): SimulationStateDiff {
+  const { result, flagDiffs } = makeAndTestResults(state, dest, sourceValue, word);
+
+  return [
+    makeNextInstructionDiff(state, instructionLength),
+    ...makeSetRegisterOrMemoryValueDiffs(state, dest, result, word, 'ds'),
+    ...flagDiffs,
+  ];
+}
+
+function makeTestDiffs(
+  state: ReadonlySimulationState,
+  dest: RegisterOrEac,
+  sourceValue: number,
+  word: boolean,
+  instructionLength: number,
+): SimulationStateDiff {
+  const { flagDiffs } = makeAndTestResults(state, dest, sourceValue, word);
+
+  return [makeNextInstructionDiff(state, instructionLength), ...flagDiffs];
+}
+
+function makeAndTestResults(
+  state: ReadonlySimulationState,
+  dest: RegisterOrEac,
+  sourceValue: number,
+  word: boolean,
+): {
+  readonly result: number;
+  readonly flagDiffs: Generator<SimulationStatePropertyDiff>;
+} {
   const destValue = getRegisterOrEacValue(state, dest, word, 'ds');
 
   const result = destValue & sourceValue;
 
+  return {
+    result,
+    flagDiffs: makeFlagDiffsForLogicalOp(state, result, word),
+  };
+}
+
+function makeXorDiffs(
+  state: ReadonlySimulationState,
+  dest: RegisterOrEac,
+  sourceValue: number,
+  word: boolean,
+  instructionLength: number,
+): SimulationStateDiff {
+  const destValue = getRegisterOrEacValue(state, dest, word, 'ds');
+
+  const result = destValue ^ sourceValue;
+
   return [
     makeNextInstructionDiff(state, instructionLength),
-    ...makeSetValueDiffs(state, dest, result, word, 'ds'),
+    ...makeSetRegisterOrMemoryValueDiffs(state, dest, result, word, 'ds'),
     ...makeFlagDiffsForLogicalOp(state, result, word),
   ];
 }
@@ -578,12 +830,13 @@ function makeSubDiffs(
   sourceValue: number,
   word: boolean,
   instructionLength: number,
+  updateCarry = true,
 ): SimulationStateDiff {
-  const { result, flagDiffs } = makeSubOrCmpResults(state, dest, sourceValue, word);
+  const { result, flagDiffs } = makeSubOrCmpResults(state, dest, sourceValue, word, updateCarry);
 
   return [
     makeNextInstructionDiff(state, instructionLength),
-    ...makeSetValueDiffs(state, dest, result, word, 'ds'),
+    ...makeSetRegisterOrMemoryValueDiffs(state, dest, result, word, 'ds'),
     ...flagDiffs,
   ];
 }
@@ -605,6 +858,7 @@ function makeSubOrCmpResults(
   dest: RegisterOrEac,
   sourceValue: number,
   word: boolean,
+  updateCarry = true,
 ): {
   readonly result: number;
   readonly flagDiffs: Generator<SimulationStatePropertyDiff>;
@@ -617,10 +871,10 @@ function makeSubOrCmpResults(
 
   const max = word ? 65536 : 128;
 
-  let carry = false;
+  let carry: boolean | undefined = undefined;
 
-  if (result < 0) {
-    carry = true;
+  if (updateCarry) {
+    carry = result < 0;
   }
 
   result = result % max;
@@ -635,6 +889,58 @@ function makeSubOrCmpResults(
     result,
     flagDiffs: makeFlagDiffsForArithmeticOp(state, result, overflow, word, auxCarry, carry),
   };
+}
+
+function makeXchgDiffs(
+  state: ReadonlySimulationState,
+  registerOperand: Register,
+  otherOperand: RegisterOrEac,
+  word: boolean,
+  instructionLength: number,
+): SimulationStateDiff {
+  const registerValue = getRegisterValue(state, registerOperand);
+
+  const otherValue = getRegisterOrEacValue(state, otherOperand, word, 'ds');
+
+  return [
+    makeNextInstructionDiff(state, instructionLength),
+    makeSetRegisterValueDiff(state, registerOperand, otherValue),
+    ...makeSetRegisterOrMemoryValueDiffs(state, otherOperand, registerValue, word, 'ds'),
+  ];
+}
+
+function makePushDiffs(
+  state: ReadonlySimulationState,
+  register: SegmentRegister | WordRegisterName,
+  instructionLength: number,
+): SimulationStateDiff {
+  const newSp = state.sp - 2;
+
+  const stackAddress = getMemoryAddress(state, newSp, 'ss');
+
+  return [
+    makeNextInstructionDiff(state, instructionLength),
+    makeSetNumberDiff(state, 'sp', newSp),
+    ...makeSetMemoryValueDiffs(state, stackAddress, state[register], true),
+  ];
+}
+
+function makePopDiffs(
+  state: ReadonlySimulationState,
+  dest: SegmentRegister | WordRegisterName | RegisterOrEac,
+  instructionLength: number,
+): SimulationStateDiff {
+  const stackAddress = getMemoryAddress(state, state.sp, 'ss');
+
+  const value = state.memory.readWord(stackAddress);
+
+  return [
+    makeNextInstructionDiff(state, instructionLength),
+    makeSetNumberDiff(state, 'sp', state.sp + 2),
+    ...(typeof dest === 'string'
+      ? [makeSetNumberDiff(state, dest, value)]
+      : makeSetRegisterOrMemoryValueDiffs(state, dest, value, true, 'ds')),
+  ];
 }
 
 // https://en.wikipedia.org/wiki/Overflow_flag
@@ -689,62 +995,64 @@ function getMemoryValueFromEac(
   return word ? state.memory.readWord(address) : state.memory.readByte(address);
 }
 
+function getRegisterOffsetPartFromEac(
+  state: ReadonlySimulationState,
+  eac: EffectiveAddressCalculation,
+): number {
+  switch (eac.calculationKind) {
+    case 'bx + si':
+      return state.bx + state.si;
+    case 'bx + di':
+      return state.bx + state.di;
+    case 'bp + si':
+      return state.bp + state.si;
+    case 'bp + di':
+      return state.bp + state.di;
+    case 'si':
+      return state.si;
+    case 'di':
+      return state.di;
+    case 'bp':
+      return state.bp;
+    case 'bx':
+      return state.bx;
+    case 'DIRECT ADDRESS':
+      return 0;
+  }
+}
+
+function getOffsetFromEac(
+  state: ReadonlySimulationState,
+  eac: EffectiveAddressCalculation,
+): number {
+  const reigsterPart = getRegisterOffsetPartFromEac(state, eac);
+
+  return reigsterPart + (eac.displacement ?? 0);
+}
+
 function getMemoryAddressFromEac(
   state: ReadonlySimulationState,
   eac: EffectiveAddressCalculation,
   defaultSegment: SegmentRegister,
 ): number {
-  let addressFromRegigsterPart: number;
-  switch (eac.calculationKind) {
-    case 'bx + si':
-      addressFromRegigsterPart = state.bx + state.si;
-      break;
-    case 'bx + di':
-      addressFromRegigsterPart = state.bx + state.di;
-      break;
-    case 'bp + si':
-      addressFromRegigsterPart = state.bp + state.si;
-      break;
-    case 'bp + di':
-      addressFromRegigsterPart = state.bp + state.di;
-      break;
-    case 'si':
-      addressFromRegigsterPart = state.si;
-      break;
-    case 'di':
-      addressFromRegigsterPart = state.di;
-      break;
-    case 'bp':
-      addressFromRegigsterPart = state.bp;
-      break;
-    case 'bx':
-      addressFromRegigsterPart = state.bx;
-      break;
-    case 'DIRECT ADDRESS':
-      addressFromRegigsterPart = 0;
-      break;
-  }
+  const offsetInSegment = getOffsetFromEac(state, eac);
 
   const segmentRegister = eac.segmentOverridePrefix ?? defaultSegment;
 
-  return getMemoryAddress(
-    state,
-    addressFromRegigsterPart + (eac.displacement ?? 0),
-    segmentRegister,
-  );
+  return getMemoryAddress(state, offsetInSegment, segmentRegister);
 }
 
 function getMemoryAddress(
   state: ReadonlySimulationState,
-  addressInSegment: number,
+  offsetInSegment: number,
   segmentRegister: SegmentRegister,
 ): number {
   const segmentValue = state[segmentRegister];
 
-  return ((segmentValue << 4) + addressInSegment) % total8086MemorySizeInBytes;
+  return ((segmentValue << 4) + offsetInSegment) % total8086MemorySizeInBytes;
 }
 
-function* makeSetValueDiffs(
+function* makeSetRegisterOrMemoryValueDiffs(
   state: ReadonlySimulationState,
   dest: RegisterOrEac,
   value: number,
@@ -836,14 +1144,16 @@ function* makeFlagDiffsForArithmeticOp(
   overflow: boolean,
   word: boolean,
   auxCarry: boolean,
-  carry: boolean,
+  carry: boolean | undefined,
 ): Generator<SimulationStatePropertyDiff> {
   yield makeSetFlagDiff(state, 'overflowFlag', overflow);
   yield makeSetSignFlagDiff(state, result, word);
   yield makeSetZeroFlagDiff(state, result);
   yield makeSetFlagDiff(state, 'auxCarryFlag', auxCarry);
   yield makeSetParityFlagDiff(state, result);
-  yield makeSetFlagDiff(state, 'carryFlag', carry);
+  if (carry !== undefined) {
+    yield makeSetFlagDiff(state, 'carryFlag', carry);
+  }
 }
 
 function makeSetZeroFlagDiff(

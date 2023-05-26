@@ -11,6 +11,7 @@ import {
   axReg,
   clReg,
   dxReg,
+  isWordRegister,
   registerDecodingTable,
   segmentRegisterDecodingTable,
   wordRegisterDecodingTable,
@@ -297,7 +298,7 @@ export type MovSegmentRegisterToRegisterMemoryInstruction = _TwoOperandInstructi
 
 export type LeaLoadEaToRegisterInstruction = _TwoOperandInstruction<
   'leaLoadEaToRegister',
-  Register,
+  WordRegister,
   EffectiveAddressCalculation
 >;
 
@@ -1749,6 +1750,10 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
     // lea Load EA to register
     case 0b1000_1101: {
       const [dest, sourceCategory] = decodeModRegRm(context, 1);
+
+      if (!isWordRegister(dest)) {
+        throw Error('Interal error - got non-word register in lea');
+      }
 
       if (sourceCategory.kind === 'reg') {
         throw Error(
