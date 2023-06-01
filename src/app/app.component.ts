@@ -37,6 +37,7 @@ import { valueChangesWithInitial } from './value-changes-with-initial';
  * - Add address to instruction view
  * - Proper error handling
  * - Improve perf!
+ * - string instructions should be segment-prefixable, sadly
  */
 
 @Component({

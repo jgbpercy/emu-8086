@@ -78,6 +78,16 @@ export function simulateInstruction(
   return diff;
 }
 
+const OVERFLOW_FLAG = 0b1000_0000_0000;
+const DIRECTION_FLAG = 0b0100_0000_0000;
+const INTERRUPT_FLAG = 0b0010_0000_0000;
+const TRAP_FLAG = 0b0001_0000_0000;
+const SIGN_FLAG = 0b0000_1000_0000;
+const ZERO_FLAG = 0b0000_0100_0000;
+const AUX_CARRY_FLAG = 0b0000_0001_0000;
+const PARITY_FLAG = 0b0000_0000_0100;
+const CARRY_FLAG = 0b0000_0000_0001;
+
 function simulateInstructionDiff(
   state: ReadonlySimulationState,
   instruction: DecodedInstruction,
@@ -634,6 +644,187 @@ function simulateInstructionDiff(
         makeSetRegisterValueDiff(state, instruction.op1, instruction.op2),
       ];
 
+    case 'cbwConvertByteToWord': {
+      const alValue = state.ax & 0x00ff;
+
+      let axResult: number;
+      if (alValue >= 128) {
+        axResult = 0xff00 + alValue;
+      } else {
+        axResult = alValue;
+      }
+
+      return [
+        makeNextInstructionDiff(state, instruction.byteLength),
+        makeSetNumberDiff(state, 'ax', axResult),
+      ];
+    }
+
+    case 'cwdConvertWordToDoubleWord': {
+      let dxResult: number;
+      if (state.ax >= 32768) {
+        dxResult = 0xffff;
+      } else {
+        dxResult = 0;
+      }
+
+      return [
+        makeNextInstructionDiff(state, instruction.byteLength),
+        makeSetNumberDiff(state, 'dx', dxResult),
+      ];
+    }
+
+    case 'callDirectIntersegment': {
+      const newSp = state.sp - 4;
+
+      const nextInstructionIp = state.ip + instruction.byteLength;
+
+      return [
+        makeSetNumberDiff(state, 'ip', instruction.op1),
+        makeSetNumberDiff(state, 'cs', instruction.op2),
+        makeSetNumberDiff(state, 'sp', newSp),
+        ...makeSetMemoryValueDiffs(state, newSp + 2, state.cs, true),
+        ...makeSetMemoryValueDiffs(state, newSp, nextInstructionIp, true),
+      ];
+    }
+
+    case 'wait': {
+      return [makeNextInstructionDiff(state, instruction.byteLength)]; // TODO? :p
+    }
+
+    case 'pushfPushFlags': {
+      const overflow = state.overflowFlag ? OVERFLOW_FLAG : 0;
+      const direction = state.directionFlag ? DIRECTION_FLAG : 0;
+      const interrupt = state.interruptFlag ? INTERRUPT_FLAG : 0;
+      const trap = state.trapFlag ? TRAP_FLAG : 0;
+      const sign = state.signFlag ? SIGN_FLAG : 0;
+      const zero = state.zeroFlag ? ZERO_FLAG : 0;
+      const auxCarry = state.auxCarryFlag ? AUX_CARRY_FLAG : 0;
+      const parity = state.parityFlag ? PARITY_FLAG : 0;
+      const carry = state.carryFlag ? CARRY_FLAG : 0;
+
+      const flagsValue =
+        overflow & direction & interrupt & trap & sign & zero & auxCarry & parity & carry;
+
+      const newSp = state.sp - 2;
+
+      return [
+        makeNextInstructionDiff(state, instruction.byteLength),
+        makeSetNumberDiff(state, 'sp', newSp),
+        ...makeSetMemoryValueDiffs(state, newSp, flagsValue, true),
+      ];
+    }
+
+    case 'popfPopFlags': {
+      const stackAddress = getMemoryAddress(state, state.sp, 'ss');
+
+      const flagsValue = state.memory.readWord(stackAddress);
+
+      const overflow = !!(flagsValue & OVERFLOW_FLAG);
+      const direction = !!(flagsValue & DIRECTION_FLAG);
+      const interrupt = !!(flagsValue & INTERRUPT_FLAG);
+      const trap = !!(flagsValue & TRAP_FLAG);
+      const sign = !!(flagsValue & SIGN_FLAG);
+      const zero = !!(flagsValue & ZERO_FLAG);
+      const auxCarry = !!(flagsValue & AUX_CARRY_FLAG);
+      const parity = !!(flagsValue & PARITY_FLAG);
+      const carry = !!(flagsValue & CARRY_FLAG);
+
+      const newSp = state.sp + 2;
+
+      return [
+        makeNextInstructionDiff(state, instruction.byteLength),
+        makeSetFlagDiff(state, 'overflowFlag', overflow),
+        makeSetFlagDiff(state, 'directionFlag', direction),
+        makeSetFlagDiff(state, 'interruptFlag', interrupt),
+        makeSetFlagDiff(state, 'trapFlag', trap),
+        makeSetFlagDiff(state, 'signFlag', sign),
+        makeSetFlagDiff(state, 'zeroFlag', zero),
+        makeSetFlagDiff(state, 'auxCarryFlag', auxCarry),
+        makeSetFlagDiff(state, 'parityFlag', parity),
+        makeSetFlagDiff(state, 'carryFlag', carry),
+        makeSetNumberDiff(state, 'sp', newSp),
+      ];
+    }
+
+    case 'sahfStoreAhIntoFlags': {
+      const flagsValue = state.ax >> 8;
+
+      const sign = !!(flagsValue & SIGN_FLAG);
+      const zero = !!(flagsValue & ZERO_FLAG);
+      const auxCarry = !!(flagsValue & AUX_CARRY_FLAG);
+      const parity = !!(flagsValue & PARITY_FLAG);
+      const carry = !!(flagsValue & CARRY_FLAG);
+
+      return [
+        makeNextInstructionDiff(state, instruction.byteLength),
+        makeSetFlagDiff(state, 'signFlag', sign),
+        makeSetFlagDiff(state, 'zeroFlag', zero),
+        makeSetFlagDiff(state, 'auxCarryFlag', auxCarry),
+        makeSetFlagDiff(state, 'parityFlag', parity),
+        makeSetFlagDiff(state, 'carryFlag', carry),
+      ];
+    }
+
+    case 'lahfLoadAhWithFlags': {
+      const sign = state.signFlag ? SIGN_FLAG : 0;
+      const zero = state.zeroFlag ? ZERO_FLAG : 0;
+      const auxCarry = state.auxCarryFlag ? AUX_CARRY_FLAG : 0;
+      const parity = state.parityFlag ? PARITY_FLAG : 0;
+      const carry = state.carryFlag ? CARRY_FLAG : 0;
+
+      const value = sign & zero & auxCarry & parity & carry;
+
+      return [
+        makeNextInstructionDiff(state, instruction.byteLength),
+        makeSetNumberDiff(state, 'ax', value << 8),
+      ];
+    }
+
+    case 'movMemoryToAccumulator':
+      return [
+        makeNextInstructionDiff(state, instruction.byteLength),
+        makeSetRegisterValueDiff(
+          state,
+          instruction.op1,
+          getMemoryValueFromEac(state, instruction.op2, isWordRegister(instruction.op1), 'ds'),
+        ),
+      ];
+
+    case 'movAccumulatorToMemory':
+      return [
+        makeNextInstructionDiff(state, instruction.byteLength),
+        ...makeSetMemoryValueDiffs(
+          state,
+          getMemoryAddressFromEac(state, instruction.op1, 'ds'),
+          getRegisterValue(state, instruction.op2),
+          isWordRegister(instruction.op2),
+        ),
+      ];
+
+    case 'movsMoveByteWord': {
+      if (!instruction.rep) {
+        const sourceAddress = getMemoryAddress(state, state.si, 'ds');
+
+        return [
+          makeNextInstructionDiff(state, instruction.byteLength),
+          ...makeSetMemoryValueDiffs(
+            state,
+            getMemoryAddress(state, state.di, 'es'),
+            instruction.word
+              ? state.memory.readWord(sourceAddress)
+              : state.memory.readByte(sourceAddress),
+            instruction.word,
+          ),
+        ];
+      } else {
+        return [
+          makeNextInstructionDiff(state, instruction.byteLength),
+          ...makeRepMovsMemoryDiffs(state, instruction.word),
+        ];
+      }
+    }
+
     case 'movImmediateToRegisterMemory': {
       const dest = instruction.op1;
 
@@ -943,6 +1134,27 @@ function makePopDiffs(
   ];
 }
 
+function* makeRepMovsMemoryDiffs(
+  state: ReadonlySimulationState,
+  word: boolean,
+): Generator<MemoryDiff> {
+  const direction = state.directionFlag ? 1 : -1;
+  const size = word ? 2 : 1;
+
+  for (let i = state.cx; i >= 0; i--) {
+    const offset = i * direction * size;
+
+    const sourceAddress = getMemoryAddress(state, state.si + offset, 'ds');
+
+    yield* makeSetMemoryValueDiffs(
+      state,
+      getMemoryAddress(state, state.di + offset, 'es'),
+      word ? state.memory.readWord(sourceAddress) : state.memory.readByte(sourceAddress),
+      word,
+    );
+  }
+}
+
 // https://en.wikipedia.org/wiki/Overflow_flag
 function getOverflowFlag(
   destValue: number,
@@ -1114,7 +1326,7 @@ function* makeSetMemoryValueDiffs(
   address: number,
   value: number,
   word: boolean,
-): Generator<SimulationStatePropertyDiff> {
+): Generator<MemoryDiff> {
   if (word) {
     const leastSignificantByte = value & 0x00ff;
     const mostSignificantByte = (value & 0xff00) >> 8;
