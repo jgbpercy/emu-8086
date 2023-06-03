@@ -5,6 +5,7 @@ import {
   Register,
   SegmentRegister,
   WordRegisterName,
+  alReg,
   axReg,
   isHigh8BitRegister,
   isWordRegister,
@@ -638,12 +639,6 @@ function simulateInstructionDiff(
     case 'xchgRegisterWithAccumulator':
       return makeXchgDiffs(state, instruction.op1, instruction.op2, true, instruction.byteLength);
 
-    case 'movImmediateToRegister':
-      return [
-        makeNextInstructionDiff(state, instruction.byteLength),
-        makeSetRegisterValueDiff(state, instruction.op1, instruction.op2),
-      ];
-
     case 'cbwConvertByteToWord': {
       const alValue = state.ax & 0x00ff;
 
@@ -804,13 +799,14 @@ function simulateInstructionDiff(
 
     case 'movsMoveByteWord': {
       if (!instruction.rep) {
-        const sourceAddress = getMemoryAddress(state, state.si, 'ds');
+        const { destAddress, sourceAddress } = getStringInstructionAddresses(state, 0);
 
         return [
           makeNextInstructionDiff(state, instruction.byteLength),
+          ...makeStringInstructionRegisterDiffs(state, 1, instruction.word),
           ...makeSetMemoryValueDiffs(
             state,
-            getMemoryAddress(state, state.di, 'es'),
+            destAddress,
             instruction.word
               ? state.memory.readWord(sourceAddress)
               : state.memory.readByte(sourceAddress),
@@ -820,10 +816,251 @@ function simulateInstructionDiff(
       } else {
         return [
           makeNextInstructionDiff(state, instruction.byteLength),
+          ...makeStringInstructionRegisterDiffs(state, state.cx, instruction.word),
+          makeSetNumberDiff(state, 'cx', 0),
           ...makeRepMovsMemoryDiffs(state, instruction.word),
         ];
       }
     }
+
+    case 'cmpsCompareByteWord': {
+      if (!instruction.rep) {
+        const { destAddress, sourceAddress } = getStringInstructionAddresses(state, 0);
+
+        const destValue = instruction.word
+          ? state.memory.readWord(destAddress)
+          : state.memory.readByte(destAddress);
+        const sourceValue = instruction.word
+          ? state.memory.readWord(sourceAddress)
+          : state.memory.readByte(sourceAddress);
+
+        const { flagDiffs } = makeSubOrCmpResultsWithDestValue(
+          state,
+          destValue,
+          sourceValue,
+          instruction.word,
+        );
+
+        return [
+          makeNextInstructionDiff(state, instruction.byteLength),
+          ...makeStringInstructionRegisterDiffs(state, 1, instruction.word),
+          ...flagDiffs,
+        ];
+      } else {
+        if (state.cx === 0) {
+          return [makeNextInstructionDiff(state, instruction.byteLength)];
+        }
+
+        let cx = state.cx;
+
+        const zeroFlagTarget = instruction.rep === 'rep ' ? true : false;
+        let zeroFlag: boolean;
+
+        const direction = state.directionFlag ? -1 : 1;
+        const size = instruction.word ? 2 : 1;
+
+        let offset = 0;
+        let destValue: number;
+        let sourceValue: number;
+
+        do {
+          const { destAddress, sourceAddress } = getStringInstructionAddresses(state, offset);
+
+          destValue = instruction.word
+            ? state.memory.readWord(destAddress)
+            : state.memory.readByte(destAddress);
+          sourceValue = instruction.word
+            ? state.memory.readWord(sourceAddress)
+            : state.memory.readByte(sourceAddress);
+
+          const result = sourceValue - destValue;
+
+          zeroFlag = result === 0;
+
+          cx--;
+
+          offset = (state.cx - cx) * direction * size;
+        } while (cx !== 0 && zeroFlag !== zeroFlagTarget);
+
+        const { flagDiffs } = makeSubOrCmpResultsWithDestValue(
+          state,
+          destValue,
+          sourceValue,
+          instruction.word,
+        );
+
+        return [
+          makeNextInstructionDiff(state, instruction.byteLength),
+          ...makeStringInstructionRegisterDiffs(state, state.cx - cx, instruction.word),
+          makeSetNumberDiff(state, 'cx', cx),
+          ...flagDiffs,
+        ];
+      }
+    }
+
+    case 'testImmediateWithAccumulator':
+      return makeTestDiffs(
+        state,
+        instruction.op1,
+        instruction.op2,
+        isWordRegister(instruction.op1),
+        instruction.byteLength,
+      );
+
+    case 'stosStoreByteWordFromAlAx': {
+      const repetitions = instruction.rep ? state.cx : 1;
+
+      const direction = state.directionFlag ? -1 : 1;
+      const size = instruction.word ? 2 : 1;
+
+      const nextInstructionDiff = makeNextInstructionDiff(state, instruction.byteLength);
+      const diDiff = makeSetNumberDiff(state, 'di', repetitions * size * direction);
+
+      let memoryDiffs: MemoryDiff[];
+
+      if (instruction.word) {
+        memoryDiffs = new Array(repetitions * 2);
+
+        for (let i = 0; i < repetitions; i++) {
+          const { destAddress } = getStringInstructionAddresses(state, i * direction);
+
+          const diffsForThisIteration = makeSetMemoryValueDiffs(state, destAddress, state.ax, true);
+
+          memoryDiffs[2 * i] = diffsForThisIteration.next().value;
+          memoryDiffs[2 * i + 1] = diffsForThisIteration.next().value;
+
+          if (!diffsForThisIteration.next().done) {
+            throw Error('Internal error - expected end of iterator');
+          }
+        }
+      } else {
+        memoryDiffs = new Array(repetitions);
+
+        const value = state.ax && 0x00ff;
+
+        for (let i = 0; i < repetitions; i++) {
+          const { destAddress } = getStringInstructionAddresses(state, i * direction);
+
+          memoryDiffs[i] = makeSetMemoryValueDiff(state, destAddress, value);
+        }
+      }
+
+      if (instruction.rep) {
+        return [nextInstructionDiff, makeSetNumberDiff(state, 'cx', 0), diDiff, ...memoryDiffs];
+      } else {
+        return [nextInstructionDiff, diDiff, ...memoryDiffs];
+      }
+    }
+
+    case 'lodsLoadByteWordFromAlAx': {
+      const repetitions = instruction.rep ? state.cx : 1;
+
+      const direction = state.directionFlag ? -1 : 1;
+      const size = instruction.word ? 2 : 1;
+
+      const finalSi = repetitions * size * direction;
+
+      const nextInstructionDiff = makeNextInstructionDiff(state, instruction.byteLength);
+      const siDiff = makeSetNumberDiff(state, 'si', finalSi);
+
+      const finalAddress = getMemoryAddress(state, finalSi, 'ds');
+
+      const sourceValue = instruction.word
+        ? state.memory.readWord(finalAddress)
+        : state.memory.readByte(finalAddress);
+
+      const setRegisterDiff = makeSetRegisterValueDiff(
+        state,
+        instruction.word ? axReg : alReg,
+        sourceValue,
+      );
+
+      if (instruction.rep) {
+        return [nextInstructionDiff, setRegisterDiff, makeSetNumberDiff(state, 'cx', 0), siDiff];
+      } else {
+        return [nextInstructionDiff, setRegisterDiff, siDiff];
+      }
+    }
+
+    case 'scasScanByteWord': {
+      const sourceValue = instruction.word ? state.ax : state.ax & 0x00ff;
+
+      if (!instruction.rep) {
+        const { destAddress } = getStringInstructionAddresses(state, 0);
+
+        const destValue = instruction.word
+          ? state.memory.readWord(destAddress)
+          : state.memory.readByte(destAddress);
+
+        const { flagDiffs } = makeSubOrCmpResultsWithDestValue(
+          state,
+          destValue,
+          sourceValue,
+          instruction.word,
+        );
+
+        const direction = state.directionFlag ? -1 : 1;
+
+        const size = instruction.word ? 2 : 1;
+
+        return [
+          makeNextInstructionDiff(state, instruction.byteLength),
+          makeSetNumberDiff(state, 'di', state.di + direction * size),
+          ...flagDiffs,
+        ];
+      } else {
+        if (state.cx === 0) {
+          return [makeNextInstructionDiff(state, instruction.byteLength)];
+        }
+
+        let cx = state.cx;
+
+        const zeroFlagTarget = instruction.rep === 'rep ' ? true : false;
+        let zeroFlag: boolean;
+
+        const direction = state.directionFlag ? -1 : 1;
+        const size = instruction.word ? 2 : 1;
+
+        let offset = 0;
+        let destValue: number;
+
+        do {
+          const { destAddress } = getStringInstructionAddresses(state, offset);
+
+          destValue = instruction.word
+            ? state.memory.readWord(destAddress)
+            : state.memory.readByte(destAddress);
+
+          const result = sourceValue - destValue;
+
+          zeroFlag = result === 0;
+
+          cx--;
+
+          offset = (state.cx - cx) * direction * size;
+        } while (cx !== 0 && zeroFlag !== zeroFlagTarget);
+
+        const { flagDiffs } = makeSubOrCmpResultsWithDestValue(
+          state,
+          destValue,
+          sourceValue,
+          instruction.word,
+        );
+
+        return [
+          makeNextInstructionDiff(state, instruction.byteLength),
+          makeSetNumberDiff(state, 'di', state.di + offset),
+          makeSetNumberDiff(state, 'cx', cx),
+          ...flagDiffs,
+        ];
+      }
+    }
+
+    case 'movImmediateToRegister':
+      return [
+        makeNextInstructionDiff(state, instruction.byteLength),
+        makeSetRegisterValueDiff(state, instruction.op1, instruction.op2),
+      ];
 
     case 'movImmediateToRegisterMemory': {
       const dest = instruction.op1;
@@ -1044,18 +1281,30 @@ function makeCmpDiffs(
   return [makeNextInstructionDiff(state, instructionLength), ...flagDiffs];
 }
 
+interface SubOrCmpResults {
+  readonly result: number;
+  readonly flagDiffs: Generator<SimulationStatePropertyDiff>;
+}
+
 function makeSubOrCmpResults(
   state: ReadonlySimulationState,
   dest: RegisterOrEac,
   sourceValue: number,
   word: boolean,
   updateCarry = true,
-): {
-  readonly result: number;
-  readonly flagDiffs: Generator<SimulationStatePropertyDiff>;
-} {
+): SubOrCmpResults {
   const destValue = getRegisterOrEacValue(state, dest, word, 'ds');
 
+  return makeSubOrCmpResultsWithDestValue(state, destValue, sourceValue, word, updateCarry);
+}
+
+function makeSubOrCmpResultsWithDestValue(
+  state: ReadonlySimulationState,
+  destValue: number,
+  sourceValue: number,
+  word: boolean,
+  updateCarry = true,
+): SubOrCmpResults {
   const auxCarry = (destValue & 0b1111) < (sourceValue & 0b1111);
 
   let result = destValue - sourceValue;
@@ -1138,21 +1387,49 @@ function* makeRepMovsMemoryDiffs(
   state: ReadonlySimulationState,
   word: boolean,
 ): Generator<MemoryDiff> {
-  const direction = state.directionFlag ? 1 : -1;
+  const direction = state.directionFlag ? -1 : 1;
   const size = word ? 2 : 1;
 
-  for (let i = state.cx; i >= 0; i--) {
+  for (let i = 0; state.cx - i >= 0; i++) {
     const offset = i * direction * size;
 
-    const sourceAddress = getMemoryAddress(state, state.si + offset, 'ds');
+    const { destAddress, sourceAddress } = getStringInstructionAddresses(state, offset);
 
     yield* makeSetMemoryValueDiffs(
       state,
-      getMemoryAddress(state, state.di + offset, 'es'),
+      destAddress,
       word ? state.memory.readWord(sourceAddress) : state.memory.readByte(sourceAddress),
       word,
     );
   }
+}
+
+function getStringInstructionAddresses(
+  state: ReadonlySimulationState,
+  offset: number,
+): {
+  readonly destAddress: number;
+  readonly sourceAddress: number;
+} {
+  return {
+    destAddress: getMemoryAddress(state, state.di + offset, 'es'),
+    sourceAddress: getMemoryAddress(state, state.si + offset, 'ds'),
+  };
+}
+
+function* makeStringInstructionRegisterDiffs(
+  state: ReadonlySimulationState,
+  repetitions: number,
+  word: boolean,
+): Generator<SimulationStatePropertyDiff> {
+  const direction = state.directionFlag ? -1 : 1;
+
+  const size = word ? 2 : 1;
+
+  const offset = repetitions * direction * size;
+
+  yield makeSetNumberDiff(state, 'di', state.di + offset);
+  yield makeSetNumberDiff(state, 'si', state.si + offset);
 }
 
 // https://en.wikipedia.org/wiki/Overflow_flag
