@@ -1,7 +1,13 @@
 <h1>JoeTDC's 8086 Disassembler/Assembler/Simulator</h1>
 <h2>🚨🐷🚨🐛🚨 This is a toy project - not complete, fast or bug-free! 🚨🐛🚨🐷🚨</h2>
 
-<div class="content">
+<div class="content" #content>
+  <div class="window" cdkDrag [cdkDragBoundary]="content">
+    <div class="window-title" cdkDragHandle>Memory View</div>
+
+    <div class="memory-image"><canvas class="memory-image-canvas" #memoryImageCanvas></canvas></div>
+  </div>
+
   <div class="upload-button-container" *ngIf="!annotatedInstructions">
     <input style="display: none" type="file" (change)="gotFile($event)" #fileInput />
 

@@ -1,7 +1,8 @@
+import { CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
 import { CommonModule } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, NgZone, ViewChild, inject } from '@angular/core';
 import { FormBuilder, FormControl, ReactiveFormsModule } from '@angular/forms';
-import { map } from 'rxjs';
+import { animationFrames, map } from 'rxjs';
 import {
   AnnotatedInstructionComponent,
   AnnotatedInstructionData,
@@ -50,12 +51,15 @@ import { valueChangesWithInitial } from './value-changes-with-initial';
     FlagPipe,
     SimulatedInstructionComponent,
     ReactiveFormsModule,
+    CdkDrag,
+    CdkDragHandle,
   ],
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.scss'],
 })
-export class AppComponent {
+export class AppComponent implements AfterViewInit {
   readonly fb = inject(FormBuilder);
+  readonly zone = inject(NgZone);
 
   annotatedInstructions?: ReadonlyArray<AnnotatedInstructionData>;
 
@@ -119,6 +123,8 @@ export class AppComponent {
     }),
   );
 
+  @ViewChild('memoryImageCanvas') memoryImageCanvas!: ElementRef<HTMLCanvasElement>;
+
   gotFile(evt: Event): void {
     if (!(evt.target instanceof HTMLInputElement)) {
       throw Error('Internal error: got file from non-input element');
@@ -169,7 +175,7 @@ export class AppComponent {
         let instructionsSimulated = 0;
         // eslint-disable-next-line no-constant-condition
         while (true) {
-          if (instructionsSimulated > 2000) {
+          if (instructionsSimulated > 200000) {
             break;
           }
 
@@ -214,6 +220,58 @@ export class AppComponent {
     }
   }
 
+  ngAfterViewInit(): void {
+    const { height, width } = this.memoryImageCanvas.nativeElement.getBoundingClientRect();
+
+    this.memoryImageCanvas.nativeElement.height = height / 4;
+    this.memoryImageCanvas.nativeElement.width = width / 4;
+
+    const context = this.memoryImageCanvas.nativeElement.getContext('2d');
+
+    if (context) {
+      this.zone.runOutsideAngular(() => {
+        animationFrames().subscribe(() => {
+          // const blah2 = new Uint8ClampedArray(4 * 64 * 64);
+
+          // for (let i = 0; i < blah2.length; i += 4) {
+          //   if (i < 4 * 64 * 10) {
+          //     blah2[i] = 256;
+          //     blah2[i + 1] = 0;
+          //     blah2[i + 2] = 0;
+          //     blah2[i + 3] = 256;
+          //   } else if (i < 4 * 64 * 20) {
+          //     blah2[i] = 0;
+          //     blah2[i + 1] = 256;
+          //     blah2[i + 2] = 0;
+          //     blah2[i + 3] = 256;
+          //   } else if (i < 4 * 64 * 30) {
+          //     blah2[i] = 0;
+          //     blah2[i + 1] = 0;
+          //     blah2[i + 2] = 256;
+          //     blah2[i + 3] = 256;
+          //   } else {
+          //     blah2[i] = 256;
+          //     blah2[i + 1] = 256;
+          //     blah2[i + 2] = 256;
+          //     blah2[i + 3] = 256;
+          //   }
+          // }
+
+          // const thinger = new ImageData(blah2, 64, 64);
+
+          const chunk = this.simulationState.memory.getRawChunkForAddress(
+            this.simulationState.ds << 4,
+          );
+
+          if (chunk) {
+            createImageBitmap(new ImageData(new Uint8ClampedArray(chunk), 64, 64)).then((image) => {
+              context.drawImage(image, 0, 0);
+            });
+          }
+        });
+      });
+    }
+  }
   // TODO
   // download(): void {
   //   const blob = new Blob([this.instructionString]);

@@ -1,5 +1,5 @@
 export const total8086MemorySizeInBytes = 2 ** 20;
-const chunkSizePower = 12;
+const chunkSizePower = 14; // TODO this size is just cheating temporarily to make the chunk size what we need for the CE image example
 const chunkSizeInBytes = 2 ** chunkSizePower;
 const chunkMask = (total8086MemorySizeInBytes / chunkSizeInBytes - 1) << chunkSizePower;
 const addressInChunkMask = 2 ** chunkSizePower - 1;
@@ -60,6 +60,10 @@ export class Memory implements ReadonlyMemory {
     }
 
     chunk[address & addressInChunkMask] = value;
+  }
+
+  getRawChunkForAddress(address: number): Uint8Array | undefined {
+    return this.chunks.get(Memory.getChunk(address));
   }
 
   private static getChunk(address: number): number {
