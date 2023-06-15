@@ -688,20 +688,9 @@ function simulateInstructionDiff(
     }
 
     case 'pushfPushFlags': {
-      const overflow = state.overflowFlag ? OVERFLOW_FLAG : 0;
-      const direction = state.directionFlag ? DIRECTION_FLAG : 0;
-      const interrupt = state.interruptFlag ? INTERRUPT_FLAG : 0;
-      const trap = state.trapFlag ? TRAP_FLAG : 0;
-      const sign = state.signFlag ? SIGN_FLAG : 0;
-      const zero = state.zeroFlag ? ZERO_FLAG : 0;
-      const auxCarry = state.auxCarryFlag ? AUX_CARRY_FLAG : 0;
-      const parity = state.parityFlag ? PARITY_FLAG : 0;
-      const carry = state.carryFlag ? CARRY_FLAG : 0;
-
-      const flagsValue =
-        overflow & direction & interrupt & trap & sign & zero & auxCarry & parity & carry;
-
       const newSp = state.sp - 2;
+
+      const flagsValue = getFlagsValue(state);
 
       return [
         makeNextInstructionDiff(state, instruction.byteLength),
@@ -1062,6 +1051,32 @@ function simulateInstructionDiff(
         makeSetRegisterValueDiff(state, instruction.op1, instruction.op2),
       ];
 
+    case 'retWithinSegAddingImmedToSp': {
+      const stackAdress = getMemoryAddress(state, state.sp, 'ss');
+
+      const newIp = state.memory.readWord(stackAdress);
+
+      const newSp = state.sp + 2 + instruction.op1;
+
+      return [makeSetNumberDiff(state, 'ip', newIp), makeSetNumberDiff(state, 'sp', newSp)];
+    }
+
+    case 'retWithinSegment': {
+      const stackAddress = getMemoryAddress(state, state.sp, 'ss');
+
+      const newIp = state.memory.readWord(stackAddress);
+
+      const newSp = state.sp + 2;
+
+      return [makeSetNumberDiff(state, 'ip', newIp), makeSetNumberDiff(state, 'sp', newSp)];
+    }
+
+    case 'lesLoadPointerToEs':
+      return makeLoadPointerDiffs(state, instruction.op2, instruction.op1.name, 'es');
+
+    case 'ldsLoadPointerToDs':
+      return makeLoadPointerDiffs(state, instruction.op2, instruction.op1.name, 'ds');
+
     case 'movImmediateToRegisterMemory': {
       const dest = instruction.op1;
 
@@ -1076,6 +1091,42 @@ function simulateInstructionDiff(
         ),
       ];
     }
+
+    case 'retIntersegmentAddingImmediateToSp': {
+      const stackAddress = getMemoryAddress(state, state.sp, 'ss');
+
+      const newIp = state.memory.readWord(stackAddress);
+      const newCs = state.memory.readWord(stackAddress + 2);
+
+      const newSp = state.sp + 4 + instruction.op1;
+
+      return [
+        makeSetNumberDiff(state, 'ip', newIp),
+        makeSetNumberDiff(state, 'cs', newCs),
+        makeSetNumberDiff(state, 'sp', newSp),
+      ];
+    }
+
+    case 'retIntersegment': {
+      const stackAddress = getMemoryAddress(state, state.sp, 'ss');
+
+      const newIp = state.memory.readWord(stackAddress);
+      const newCs = state.memory.readWord(stackAddress + 2);
+
+      const newSp = state.sp + 4;
+
+      return [
+        makeSetNumberDiff(state, 'ip', newIp),
+        makeSetNumberDiff(state, 'cs', newCs),
+        makeSetNumberDiff(state, 'sp', newSp),
+      ];
+    }
+
+    case 'intType3':
+      return makeInterruptDiff(state, 3);
+
+    case 'intTypeSpecified':
+      return makeInterruptDiff(state, instruction.op1);
 
     case 'loopneLoopWhileNotEqual':
       return makeLoopDiff(state, instruction, state.cx - 1 !== 0 && !state.zeroFlag);
@@ -1404,6 +1455,27 @@ function* makeRepMovsMemoryDiffs(
   }
 }
 
+function makeLoadPointerDiffs(
+  state: ReadonlySimulationState,
+  eac: EffectiveAddressCalculation,
+  register: WordRegisterName,
+  segmentRegister: SegmentRegister,
+): SimulationStateDiff {
+  const newRegisterValue = getMemoryValueFromEac(state, eac, true, 'ds');
+
+  const newSegmentRegisterValue = getMemoryValueFromEac(
+    state,
+    { ...eac, displacement: (eac.displacement ?? 0) + 2 },
+    true,
+    'ds',
+  );
+
+  return [
+    makeSetNumberDiff(state, register, newRegisterValue),
+    makeSetNumberDiff(state, segmentRegister, newSegmentRegisterValue),
+  ];
+}
+
 function getStringInstructionAddresses(
   state: ReadonlySimulationState,
   offset: number,
@@ -1430,6 +1502,32 @@ function* makeStringInstructionRegisterDiffs(
 
   yield makeSetNumberDiff(state, 'di', state.di + offset);
   yield makeSetNumberDiff(state, 'si', state.si + offset);
+}
+
+function makeInterruptDiff(
+  state: ReadonlySimulationState,
+  interruptType: number,
+): SimulationStateDiff {
+  const flagsValue = getFlagsValue(state);
+
+  const interruptPointerAddress = interruptType * 4;
+
+  const newIp = state.memory.readWord(interruptPointerAddress);
+  const newCs = state.memory.readWord(interruptPointerAddress + 2);
+
+  const newSp = state.sp - 6;
+  const newStackAddress = getMemoryAddress(state, newSp, 'ss');
+
+  return [
+    makeSetNumberDiff(state, 'ip', newIp),
+    makeSetNumberDiff(state, 'cs', newCs),
+    makeSetNumberDiff(state, 'sp', newSp),
+    ...makeSetMemoryValueDiffs(state, newStackAddress, state.ip, true),
+    ...makeSetMemoryValueDiffs(state, newStackAddress + 2, state.cs, true),
+    ...makeSetMemoryValueDiffs(state, newStackAddress + 4, flagsValue, true),
+    makeSetFlagDiff(state, 'trapFlag', false),
+    makeSetFlagDiff(state, 'interruptFlag', false),
+  ];
 }
 
 // https://en.wikipedia.org/wiki/Overflow_flag
@@ -1643,6 +1741,20 @@ function* makeFlagDiffsForArithmeticOp(
   if (carry !== undefined) {
     yield makeSetFlagDiff(state, 'carryFlag', carry);
   }
+}
+
+function getFlagsValue(state: ReadonlySimulationState): number {
+  const overflow = state.overflowFlag ? OVERFLOW_FLAG : 0;
+  const direction = state.directionFlag ? DIRECTION_FLAG : 0;
+  const interrupt = state.interruptFlag ? INTERRUPT_FLAG : 0;
+  const trap = state.trapFlag ? TRAP_FLAG : 0;
+  const sign = state.signFlag ? SIGN_FLAG : 0;
+  const zero = state.zeroFlag ? ZERO_FLAG : 0;
+  const auxCarry = state.auxCarryFlag ? AUX_CARRY_FLAG : 0;
+  const parity = state.parityFlag ? PARITY_FLAG : 0;
+  const carry = state.carryFlag ? CARRY_FLAG : 0;
+
+  return overflow & direction & interrupt & trap & sign & zero & auxCarry & parity & carry;
 }
 
 function makeSetZeroFlagDiff(
