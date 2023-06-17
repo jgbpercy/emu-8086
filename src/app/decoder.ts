@@ -528,7 +528,7 @@ export type InVariablePortInstruction = _TwoOperandInstruction<
 >;
 
 export type OutVariablePortInstruction = _TwoOperandInstruction<
-  'outVariablePortInstruction',
+  'outVariablePort',
   typeof dxReg,
   AccumulatorRegister
 >;
@@ -548,8 +548,8 @@ export type NotInvertInstruction = _OneOperandInstruction<'notInvert', RegisterO
 export type NegChangeSignInstruction = _OneOperandInstruction<'negChangeSign', RegisterOrEac> &
   _Lockable;
 
-export type MulMultipleUnsignedInstruction = _OneOperandInstruction<
-  'mulMultipleUnsigned',
+export type MulMultiplyUnsignedInstruction = _OneOperandInstruction<
+  'mulMultiplyUnsigned',
   RegisterOrEac
 >;
 
@@ -669,7 +669,7 @@ type LoopOrJumpCxInstuction =
 type SingleOperandMathInstruction =
   | NotInvertInstruction
   | NegChangeSignInstruction
-  | MulMultipleUnsignedInstruction
+  | MulMultiplyUnsignedInstruction
   | ImulIntegerMultiplySignedInstruction
   | DivDivideUnsignedInstruction
   | IdivIntegerDivideSignedInstruction;
@@ -892,7 +892,7 @@ const singleOperandMathInstructionTable: ReadonlyArray<
   // 011
   'negChangeSign',
   // 100
-  'mulMultipleUnsigned',
+  'mulMultiplyUnsigned',
   // 101
   'imulIntegerMultiplySigned',
   // 110
@@ -2475,7 +2475,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
       const instructionKind:
         | InVariablePortInstruction['kind']
         | OutVariablePortInstruction['kind'] = instructionBit
-        ? 'outVariablePortInstruction'
+        ? 'outVariablePort'
         : 'inVariablePort';
 
       const reg = wBit ? axReg : alReg;

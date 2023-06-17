@@ -889,7 +889,7 @@ export function encodeBitAnnotationsWithoutLockOrRep(
     case 'inVariablePort':
       return encodeInOutVariablePort(0b1110_110, instruction.op1);
 
-    case 'outVariablePortInstruction':
+    case 'outVariablePort':
       return encodeInOutVariablePort(0b1110_111, instruction.op2);
 
     case 'hltHalt':
@@ -974,7 +974,7 @@ export function encodeBitAnnotationsWithoutLockOrRep(
     case 'negChangeSign':
       return encodeSingleOperandMathInstruction(0b1111_011, 0b011, instruction);
 
-    case 'mulMultipleUnsigned':
+    case 'mulMultiplyUnsigned':
       return encodeSingleOperandMathInstruction(0b1111_011, 0b100, instruction);
 
     case 'imulIntegerMultiplySigned':
