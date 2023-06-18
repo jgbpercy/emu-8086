@@ -2,7 +2,8 @@ import { CommonModule } from '@angular/common';
 import { Component, HostBinding, Input, OnChanges, Pipe, PipeTransform } from '@angular/core';
 import { printFlag } from './flag.pipe';
 import { printNum } from './num.pipe';
-import { GenericSimulationStatePropertyDiff, MemoryDiff, SimulationStateDiff } from './simulator';
+import { SimulatedInstructionUiData } from './simulation-printer';
+import { GenericSimulationStatePropertyDiff, MemoryDiff } from './simulator';
 
 @Pipe({
   name: 'printRegisterMemoryDiff',
@@ -47,22 +48,20 @@ export class FlagDiffPipe implements PipeTransform {
   styleUrls: ['./simulated-instruction.component.scss'],
 })
 export class SimulatedInstructionComponent implements OnChanges {
-  @Input() simulationStateDiff!: SimulationStateDiff;
+  @Input() simulatedInstruction!: SimulatedInstructionUiData;
 
   registerDiffs!: ReadonlyArray<GenericSimulationStatePropertyDiff<number> | MemoryDiff>;
   flagDiffs!: ReadonlyArray<GenericSimulationStatePropertyDiff<boolean>>;
 
-  @Input() asm!: string;
-
   @Input() @HostBinding('class.odd') odd = false;
 
   ngOnChanges(): void {
-    this.registerDiffs = this.simulationStateDiff.filter(
+    this.registerDiffs = this.simulatedInstruction.diff.filter(
       (diff): diff is GenericSimulationStatePropertyDiff<number> | MemoryDiff =>
         typeof diff.from === 'number',
     );
 
-    this.flagDiffs = this.simulationStateDiff.filter(
+    this.flagDiffs = this.simulatedInstruction.diff.filter(
       (diff): diff is GenericSimulationStatePropertyDiff<boolean> => typeof diff.from === 'boolean',
     );
   }

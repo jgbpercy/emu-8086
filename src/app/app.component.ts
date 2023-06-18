@@ -7,6 +7,7 @@ import {
   AnnotatedInstructionComponent,
   AnnotatedInstructionData,
 } from './annotated-instruction.component';
+import { getMinClockCountEstimate } from './clocks-counter';
 import { printDecodedInstruction } from './decoded-instruction-printer';
 import { decodeInstructions } from './decoder';
 import { encodeBitAnnotations } from './encoder';
@@ -14,7 +15,7 @@ import { FlagPipe } from './flag.pipe';
 import { Memory, total8086MemorySizeInBytes } from './memory';
 import { NumPipe, printNum } from './num.pipe';
 import { SimulatedInstructionComponent } from './simulated-instruction.component';
-import { SimulatedInstruction, caseyPrint } from './simulation-printer';
+import { SimulatedInstructionUiData, caseyPrint } from './simulation-printer';
 import { SimulationState, simulateInstruction } from './simulator';
 import { valueChangesWithInitial } from './value-changes-with-initial';
 
@@ -24,6 +25,9 @@ import { valueChangesWithInitial } from './value-changes-with-initial';
  * - Simulate all instructions
  * - asm parser and assembler
  * - More & Better memory views
+ *   - Allow adding more values to current "watch" view
+ *   - Memory block hex viewer
+ *   - Controls for image view
  * - asm syntax highlighting
  * - tooltips for byte annotations
  * - Step-through simulation
@@ -33,12 +37,12 @@ import { valueChangesWithInitial } from './value-changes-with-initial';
  * Fixes/improvements:
  * - Fix jump label asm printing to be nasm compatible
  * - Make the instructions actually part of the memory
- * - Do segmentation properly?
- * - Ability to add more
  * - Add address to instruction view
  * - Proper error handling
  * - Improve perf!
- * - string instructions should be segment-prefixable, sadly
+ * - Store/display clock count breakdown between EA and rest-of-instruction? Casey does this but I didn't, going to leave it for now
+ * - Account for 16-bit odd-memory-address penalty in clock counts
+ * - String instructions should be segment-prefixable, sadly
  */
 
 @Component({
@@ -63,7 +67,7 @@ export class AppComponent implements AfterViewInit {
 
   annotatedInstructions?: ReadonlyArray<AnnotatedInstructionData>;
 
-  simulatedInstructions?: ReadonlyArray<SimulatedInstruction>;
+  simulatedInstructions?: ReadonlyArray<SimulatedInstructionUiData>;
 
   fileName?: string;
 
@@ -141,6 +145,7 @@ export class AppComponent implements AfterViewInit {
         const annotatedInstructions = new Array<AnnotatedInstructionData>(decodedInstructions.size);
 
         const byteIndexToAsmMap = new Map<number, string>();
+        const byteIndexToMinClockCountMap = new Map<number, number>();
 
         let i = 0;
         for (const [byteIndex, instruction] of decodedInstructions) {
@@ -166,7 +171,9 @@ export class AppComponent implements AfterViewInit {
 
         this.annotatedInstructions = annotatedInstructions;
 
-        const simulatedInstructions: SimulatedInstruction[] = [];
+        const simulatedInstructions: SimulatedInstructionUiData[] = [];
+
+        let totalClockCountEstimate = 0;
 
         // TODO probably put an explicit termination marker (just an implied halt?) in the decided instructions
         // so that we can tell the difference between getting to the end or getting to an invalid instruction
@@ -193,8 +200,24 @@ export class AppComponent implements AfterViewInit {
             );
           }
 
+          let minClockCountEstimate = byteIndexToMinClockCountMap.get(this.simulationState.ip);
+
+          if (minClockCountEstimate === undefined) {
+            minClockCountEstimate = getMinClockCountEstimate(instruction);
+            byteIndexToMinClockCountMap.set(this.simulationState.ip, minClockCountEstimate);
+          }
+
+          const simulatedInstruction = simulateInstruction(this.simulationState, instruction);
+
+          const clockCountEstimate =
+            minClockCountEstimate + simulatedInstruction.variableClockCountEstimate;
+
+          totalClockCountEstimate += clockCountEstimate;
+
           simulatedInstructions.push({
-            simulationStateDiff: simulateInstruction(this.simulationState, instruction),
+            diff: simulatedInstruction.diff,
+            clockCountEstimate,
+            cumulativeClockCountEstimate: totalClockCountEstimate,
             asm,
           });
 
@@ -231,34 +254,6 @@ export class AppComponent implements AfterViewInit {
     if (context) {
       this.zone.runOutsideAngular(() => {
         animationFrames().subscribe(() => {
-          // const blah2 = new Uint8ClampedArray(4 * 64 * 64);
-
-          // for (let i = 0; i < blah2.length; i += 4) {
-          //   if (i < 4 * 64 * 10) {
-          //     blah2[i] = 256;
-          //     blah2[i + 1] = 0;
-          //     blah2[i + 2] = 0;
-          //     blah2[i + 3] = 256;
-          //   } else if (i < 4 * 64 * 20) {
-          //     blah2[i] = 0;
-          //     blah2[i + 1] = 256;
-          //     blah2[i + 2] = 0;
-          //     blah2[i + 3] = 256;
-          //   } else if (i < 4 * 64 * 30) {
-          //     blah2[i] = 0;
-          //     blah2[i + 1] = 0;
-          //     blah2[i + 2] = 256;
-          //     blah2[i + 3] = 256;
-          //   } else {
-          //     blah2[i] = 256;
-          //     blah2[i + 1] = 256;
-          //     blah2[i + 2] = 256;
-          //     blah2[i + 3] = 256;
-          //   }
-          // }
-
-          // const thinger = new ImageData(blah2, 64, 64);
-
           const chunk = this.simulationState.memory.getRawChunkForAddress(
             this.simulationState.ds << 4,
           );

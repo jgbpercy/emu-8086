@@ -6,8 +6,10 @@ import {
   SimulationStateDiff,
 } from './simulator';
 
-export interface SimulatedInstruction {
-  readonly simulationStateDiff: SimulationStateDiff;
+export interface SimulatedInstructionUiData {
+  readonly diff: SimulationStateDiff;
+  readonly clockCountEstimate: number;
+  readonly cumulativeClockCountEstimate: number;
   readonly asm: string;
 }
 
@@ -27,14 +29,23 @@ type CaseyFlagsState = [
 export function caseyPrint(
   fileName: string,
   state: SimulationState,
-  simulatedInstructions: ReadonlyArray<SimulatedInstruction>,
+  simulatedInstructions: ReadonlyArray<SimulatedInstructionUiData>,
 ): string {
   let result = `--- test\\${fileName} execution ---\n`;
 
   const flagsState: CaseyFlagsState = ['', '', '', '', '', '', '', '', ''];
 
-  for (const { asm, simulationStateDiff: diff } of simulatedInstructions) {
-    result += `${asm} ; ${caseyPrintRegisterDiffs(diff)}${caseyPrintFlagDiffs(diff, flagsState)}\n`;
+  for (const {
+    asm,
+    diff,
+    clockCountEstimate,
+    cumulativeClockCountEstimate,
+  } of simulatedInstructions) {
+    const clocks = caseyPrintClocks(clockCountEstimate, cumulativeClockCountEstimate);
+    const registers = caseyPrintRegisterDiffs(diff);
+    const flags = caseyPrintFlagDiffs(diff, flagsState);
+
+    result += `${asm} ; ${clocks} | ${registers}${flags}\n`;
   }
 
   result += '\nFinal registers:\n';
@@ -72,7 +83,7 @@ function caseyPrintRegisterDiffs(diff: SimulationStateDiff): string {
 
     if (propertyDiff.key === 'ip') {
       ipDiff = propertyDiff;
-    } else if (typeof propertyDiff.from === 'number') {
+    } else if (typeof propertyDiff.from === 'number' && propertyDiff.from !== propertyDiff.to) {
       result += caseyPrintRegisterDiff(propertyDiff);
     }
   }
@@ -178,6 +189,10 @@ function caseyPrintFinalRegisterState(
   } else {
     return '';
   }
+}
+
+function caseyPrintClocks(clocks: number, cumulativeClocks: number): string {
+  return `Clocks: +${clocks} = ${cumulativeClocks}`;
 }
 
 function caseyPrintHex(value: number): string {

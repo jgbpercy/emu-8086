@@ -27,8 +27,7 @@
       <div class="simulation-trace">
         <simulated-instruction
           *ngFor="let simulatedInstruction of simulatedInstructions; odd as isOdd"
-          [simulationStateDiff]="simulatedInstruction.simulationStateDiff"
-          [asm]="simulatedInstruction.asm"
+          [simulatedInstruction]="simulatedInstruction"
           [odd]="isOdd"
         ></simulated-instruction>
 

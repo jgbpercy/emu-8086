@@ -68,15 +68,20 @@ export type SimulationStatePropertyDiff =
 
 export type SimulationStateDiff = ReadonlyArray<SimulationStatePropertyDiff>;
 
+export interface SimulatedInstructionData {
+  readonly diff: SimulationStateDiff;
+  readonly variableClockCountEstimate: number;
+}
+
 export function simulateInstruction(
   state: SimulationState,
   instruction: DecodedInstruction,
-): SimulationStateDiff {
-  const diff = simulateInstructionDiff(state, instruction);
+): SimulatedInstructionData {
+  const data = getSimulatedInstructionData(state, instruction);
 
-  applyDiff(state, diff);
+  applyDiff(state, data.diff);
 
-  return diff;
+  return data;
 }
 
 const OVERFLOW_FLAG = 0b1000_0000_0000;
@@ -89,10 +94,10 @@ const AUX_CARRY_FLAG = 0b0000_0001_0000;
 const PARITY_FLAG = 0b0000_0000_0100;
 const CARRY_FLAG = 0b0000_0000_0001;
 
-function simulateInstructionDiff(
+function getSimulatedInstructionData(
   state: ReadonlySimulationState,
   instruction: DecodedInstruction,
-): Readonly<SimulationStateDiff> {
+): SimulatedInstructionData {
   switch (instruction.kind) {
     case 'addRegisterMemoryWithRegisterToEither': {
       const regOperand = getRegisterOperand(instruction);
@@ -236,7 +241,7 @@ function simulateInstructionDiff(
 
       const result = (state.ax & 0xff00) + alResult;
 
-      return [
+      return makeZeroVariableClockData([
         makeNextInstructionDiff(state, instruction.byteLength),
         makeSetRegisterValueDiff(state, axReg, result),
         makeSetSignFlagDiff(state, result, false),
@@ -244,7 +249,7 @@ function simulateInstructionDiff(
         makeSetFlagDiff(state, 'auxCarryFlag', setAuxCarry),
         makeSetParityFlagDiff(state, result),
         makeSetFlagDiff(state, 'carryFlag', setCarry),
-      ];
+      ]);
     }
 
     case 'subRegisterMemoryAndRegisterToEither': {
@@ -287,7 +292,7 @@ function simulateInstructionDiff(
 
       const result = (state.ax & 0xff00) + alResult;
 
-      return [
+      return makeZeroVariableClockData([
         makeNextInstructionDiff(state, instruction.byteLength),
         makeSetRegisterValueDiff(state, axReg, result),
         makeSetSignFlagDiff(state, result, false),
@@ -295,7 +300,7 @@ function simulateInstructionDiff(
         makeSetFlagDiff(state, 'auxCarryFlag', setAuxCarry),
         makeSetParityFlagDiff(state, result),
         makeSetFlagDiff(state, 'carryFlag', setCarry),
-      ];
+      ]);
     }
 
     case 'xorRegisterMemoryAndRegisterToEither': {
@@ -332,12 +337,12 @@ function simulateInstructionDiff(
 
       const result = (ahResult & alResult & 0xff0f) % 65536;
 
-      return [
+      return makeZeroVariableClockData([
         makeNextInstructionDiff(state, instruction.byteLength),
         makeSetRegisterValueDiff(state, axReg, result),
         makeSetFlagDiff(state, 'auxCarryFlag', setCarries),
         makeSetFlagDiff(state, 'carryFlag', setCarries),
-      ];
+      ]);
     }
 
     case 'cmpRegisterMemoryAndRegister': {
@@ -379,12 +384,12 @@ function simulateInstructionDiff(
 
       const result = ahResult & alResult & 0xff0f;
 
-      return [
+      return makeZeroVariableClockData([
         makeNextInstructionDiff(state, instruction.byteLength),
         makeSetRegisterValueDiff(state, axReg, result),
         makeSetFlagDiff(state, 'auxCarryFlag', setCarries),
         makeSetFlagDiff(state, 'carryFlag', setCarries),
-      ];
+      ]);
     }
 
     case 'incRegister':
@@ -596,10 +601,10 @@ function simulateInstructionDiff(
 
       const dest = instruction.op1;
 
-      return [
+      return makeZeroVariableClockData([
         makeNextInstructionDiff(state, instruction.byteLength),
         ...makeSetRegisterOrMemoryValueDiffs(state, dest, sourceValue, word, 'ds'),
-      ];
+      ]);
     }
 
     case 'movSegmentRegisterToRegisterMemory': {
@@ -607,19 +612,19 @@ function simulateInstructionDiff(
 
       const sourceValue = state[instruction.op2];
 
-      return [
+      return makeZeroVariableClockData([
         makeNextInstructionDiff(state, instruction.byteLength),
         ...makeSetRegisterOrMemoryValueDiffs(state, dest, sourceValue, true, 'ds'),
-      ];
+      ]);
     }
 
     case 'leaLoadEaToRegister': {
       const sourceValue = getOffsetFromEac(state, instruction.op2);
 
-      return [
+      return makeZeroVariableClockData([
         makeNextInstructionDiff(state, instruction.byteLength),
         makeSetRegisterValueDiff(state, instruction.op1, sourceValue),
-      ];
+      ]);
     }
 
     case 'movRegisterMemoryToSegmentRegister': {
@@ -627,10 +632,10 @@ function simulateInstructionDiff(
 
       const sourceValue = getRegisterOrEacValue(state, source, true, 'ds');
 
-      return [
+      return makeZeroVariableClockData([
         makeNextInstructionDiff(state, instruction.byteLength),
         makeSetNumberDiff(state, instruction.op1, sourceValue),
-      ];
+      ]);
     }
 
     case 'popRegisterMemory':
@@ -649,10 +654,10 @@ function simulateInstructionDiff(
         axResult = alValue;
       }
 
-      return [
+      return makeZeroVariableClockData([
         makeNextInstructionDiff(state, instruction.byteLength),
         makeSetNumberDiff(state, 'ax', axResult),
-      ];
+      ]);
     }
 
     case 'cwdConvertWordToDoubleWord': {
@@ -663,10 +668,10 @@ function simulateInstructionDiff(
         dxResult = 0;
       }
 
-      return [
+      return makeZeroVariableClockData([
         makeNextInstructionDiff(state, instruction.byteLength),
         makeSetNumberDiff(state, 'dx', dxResult),
-      ];
+      ]);
     }
 
     case 'callDirectIntersegment': {
@@ -674,17 +679,17 @@ function simulateInstructionDiff(
 
       const nextInstructionIp = state.ip + instruction.byteLength;
 
-      return [
+      return makeZeroVariableClockData([
         makeSetNumberDiff(state, 'ip', instruction.op1),
         makeSetNumberDiff(state, 'cs', instruction.op2),
         makeSetNumberDiff(state, 'sp', newSp),
         ...makeSetMemoryValueDiffs(state, newSp + 2, state.cs, true),
         ...makeSetMemoryValueDiffs(state, newSp, nextInstructionIp, true),
-      ];
+      ]);
     }
 
     case 'wait': {
-      return [makeNextInstructionDiff(state, instruction.byteLength)]; // TODO? :p
+      return makeZeroVariableClockData([makeNextInstructionDiff(state, instruction.byteLength)]); // TODO? :p
     }
 
     case 'pushfPushFlags': {
@@ -692,11 +697,11 @@ function simulateInstructionDiff(
 
       const flagsValue = getFlagsValue(state);
 
-      return [
+      return makeZeroVariableClockData([
         makeNextInstructionDiff(state, instruction.byteLength),
         makeSetNumberDiff(state, 'sp', newSp),
         ...makeSetMemoryValueDiffs(state, newSp, flagsValue, true),
-      ];
+      ]);
     }
 
     case 'popfPopFlags': {
@@ -716,7 +721,7 @@ function simulateInstructionDiff(
 
       const newSp = state.sp + 2;
 
-      return [
+      return makeZeroVariableClockData([
         makeNextInstructionDiff(state, instruction.byteLength),
         makeSetFlagDiff(state, 'overflowFlag', overflow),
         makeSetFlagDiff(state, 'directionFlag', direction),
@@ -728,7 +733,7 @@ function simulateInstructionDiff(
         makeSetFlagDiff(state, 'parityFlag', parity),
         makeSetFlagDiff(state, 'carryFlag', carry),
         makeSetNumberDiff(state, 'sp', newSp),
-      ];
+      ]);
     }
 
     case 'sahfStoreAhIntoFlags': {
@@ -740,14 +745,14 @@ function simulateInstructionDiff(
       const parity = !!(flagsValue & PARITY_FLAG);
       const carry = !!(flagsValue & CARRY_FLAG);
 
-      return [
+      return makeZeroVariableClockData([
         makeNextInstructionDiff(state, instruction.byteLength),
         makeSetFlagDiff(state, 'signFlag', sign),
         makeSetFlagDiff(state, 'zeroFlag', zero),
         makeSetFlagDiff(state, 'auxCarryFlag', auxCarry),
         makeSetFlagDiff(state, 'parityFlag', parity),
         makeSetFlagDiff(state, 'carryFlag', carry),
-      ];
+      ]);
     }
 
     case 'lahfLoadAhWithFlags': {
@@ -759,24 +764,24 @@ function simulateInstructionDiff(
 
       const value = sign & zero & auxCarry & parity & carry;
 
-      return [
+      return makeZeroVariableClockData([
         makeNextInstructionDiff(state, instruction.byteLength),
         makeSetNumberDiff(state, 'ax', value << 8),
-      ];
+      ]);
     }
 
     case 'movMemoryToAccumulator':
-      return [
+      return makeZeroVariableClockData([
         makeNextInstructionDiff(state, instruction.byteLength),
         makeSetRegisterValueDiff(
           state,
           instruction.op1,
           getMemoryValueFromEac(state, instruction.op2, isWordRegister(instruction.op1), 'ds'),
         ),
-      ];
+      ]);
 
     case 'movAccumulatorToMemory':
-      return [
+      return makeZeroVariableClockData([
         makeNextInstructionDiff(state, instruction.byteLength),
         ...makeSetMemoryValueDiffs(
           state,
@@ -784,13 +789,13 @@ function simulateInstructionDiff(
           getRegisterValue(state, instruction.op2),
           isWordRegister(instruction.op2),
         ),
-      ];
+      ]);
 
     case 'movsMoveByteWord': {
       if (!instruction.rep) {
         const { destAddress, sourceAddress } = getStringInstructionAddresses(state, 0);
 
-        return [
+        return makeZeroVariableClockData([
           makeNextInstructionDiff(state, instruction.byteLength),
           ...makeStringInstructionRegisterDiffs(state, 1, instruction.word),
           ...makeSetMemoryValueDiffs(
@@ -801,14 +806,14 @@ function simulateInstructionDiff(
               : state.memory.readByte(sourceAddress),
             instruction.word,
           ),
-        ];
+        ]);
       } else {
-        return [
+        return makeZeroVariableClockData([
           makeNextInstructionDiff(state, instruction.byteLength),
           ...makeStringInstructionRegisterDiffs(state, state.cx, instruction.word),
           makeSetNumberDiff(state, 'cx', 0),
           ...makeRepMovsMemoryDiffs(state, instruction.word),
-        ];
+        ]);
       }
     }
 
@@ -830,14 +835,16 @@ function simulateInstructionDiff(
           instruction.word,
         );
 
-        return [
+        return makeZeroVariableClockData([
           makeNextInstructionDiff(state, instruction.byteLength),
           ...makeStringInstructionRegisterDiffs(state, 1, instruction.word),
           ...flagDiffs,
-        ];
+        ]);
       } else {
         if (state.cx === 0) {
-          return [makeNextInstructionDiff(state, instruction.byteLength)];
+          return makeZeroVariableClockData([
+            makeNextInstructionDiff(state, instruction.byteLength),
+          ]);
         }
 
         let cx = state.cx;
@@ -878,12 +885,17 @@ function simulateInstructionDiff(
           instruction.word,
         );
 
-        return [
-          makeNextInstructionDiff(state, instruction.byteLength),
-          ...makeStringInstructionRegisterDiffs(state, state.cx - cx, instruction.word),
-          makeSetNumberDiff(state, 'cx', cx),
-          ...flagDiffs,
-        ];
+        const reps = state.cx - cx;
+
+        return {
+          diff: [
+            makeNextInstructionDiff(state, instruction.byteLength),
+            ...makeStringInstructionRegisterDiffs(state, reps, instruction.word),
+            makeSetNumberDiff(state, 'cx', cx),
+            ...flagDiffs,
+          ],
+          variableClockCountEstimate: reps * 22,
+        };
       }
     }
 
@@ -935,9 +947,12 @@ function simulateInstructionDiff(
       }
 
       if (instruction.rep) {
-        return [nextInstructionDiff, makeSetNumberDiff(state, 'cx', 0), diDiff, ...memoryDiffs];
+        return {
+          diff: [nextInstructionDiff, makeSetNumberDiff(state, 'cx', 0), diDiff, ...memoryDiffs],
+          variableClockCountEstimate: 10 * repetitions,
+        };
       } else {
-        return [nextInstructionDiff, diDiff, ...memoryDiffs];
+        return makeZeroVariableClockData([nextInstructionDiff, diDiff, ...memoryDiffs]);
       }
     }
 
@@ -965,9 +980,12 @@ function simulateInstructionDiff(
       );
 
       if (instruction.rep) {
-        return [nextInstructionDiff, setRegisterDiff, makeSetNumberDiff(state, 'cx', 0), siDiff];
+        return {
+          diff: [nextInstructionDiff, setRegisterDiff, makeSetNumberDiff(state, 'cx', 0), siDiff],
+          variableClockCountEstimate: 13 * repetitions,
+        };
       } else {
-        return [nextInstructionDiff, setRegisterDiff, siDiff];
+        return makeZeroVariableClockData([nextInstructionDiff, setRegisterDiff, siDiff]);
       }
     }
 
@@ -992,14 +1010,16 @@ function simulateInstructionDiff(
 
         const size = instruction.word ? 2 : 1;
 
-        return [
+        return makeZeroVariableClockData([
           makeNextInstructionDiff(state, instruction.byteLength),
           makeSetNumberDiff(state, 'di', state.di + direction * size),
           ...flagDiffs,
-        ];
+        ]);
       } else {
         if (state.cx === 0) {
-          return [makeNextInstructionDiff(state, instruction.byteLength)];
+          return makeZeroVariableClockData([
+            makeNextInstructionDiff(state, instruction.byteLength),
+          ]);
         }
 
         let cx = state.cx;
@@ -1036,20 +1056,23 @@ function simulateInstructionDiff(
           instruction.word,
         );
 
-        return [
-          makeNextInstructionDiff(state, instruction.byteLength),
-          makeSetNumberDiff(state, 'di', state.di + offset),
-          makeSetNumberDiff(state, 'cx', cx),
-          ...flagDiffs,
-        ];
+        return {
+          diff: [
+            makeNextInstructionDiff(state, instruction.byteLength),
+            makeSetNumberDiff(state, 'di', state.di + offset),
+            makeSetNumberDiff(state, 'cx', cx),
+            ...flagDiffs,
+          ],
+          variableClockCountEstimate: (state.cx - cx) * 15,
+        };
       }
     }
 
     case 'movImmediateToRegister':
-      return [
+      return makeZeroVariableClockData([
         makeNextInstructionDiff(state, instruction.byteLength),
         makeSetRegisterValueDiff(state, instruction.op1, instruction.op2),
-      ];
+      ]);
 
     case 'retWithinSegAddingImmedToSp': {
       const stackAdress = getMemoryAddress(state, state.sp, 'ss');
@@ -1058,7 +1081,10 @@ function simulateInstructionDiff(
 
       const newSp = state.sp + 2 + instruction.op1;
 
-      return [makeSetNumberDiff(state, 'ip', newIp), makeSetNumberDiff(state, 'sp', newSp)];
+      return makeZeroVariableClockData([
+        makeSetNumberDiff(state, 'ip', newIp),
+        makeSetNumberDiff(state, 'sp', newSp),
+      ]);
     }
 
     case 'retWithinSegment': {
@@ -1068,7 +1094,10 @@ function simulateInstructionDiff(
 
       const newSp = state.sp + 2;
 
-      return [makeSetNumberDiff(state, 'ip', newIp), makeSetNumberDiff(state, 'sp', newSp)];
+      return makeZeroVariableClockData([
+        makeSetNumberDiff(state, 'ip', newIp),
+        makeSetNumberDiff(state, 'sp', newSp),
+      ]);
     }
 
     case 'lesLoadPointerToEs':
@@ -1080,7 +1109,7 @@ function simulateInstructionDiff(
     case 'movImmediateToRegisterMemory': {
       const dest = instruction.op1;
 
-      return [
+      return makeZeroVariableClockData([
         makeNextInstructionDiff(state, instruction.byteLength),
         ...makeSetRegisterOrMemoryValueDiffs(
           state,
@@ -1089,7 +1118,7 @@ function simulateInstructionDiff(
           instruction.op1.kind === 'mem' && instruction.op1.length === 2,
           'ds',
         ),
-      ];
+      ]);
     }
 
     case 'retIntersegmentAddingImmediateToSp': {
@@ -1100,11 +1129,11 @@ function simulateInstructionDiff(
 
       const newSp = state.sp + 4 + instruction.op1;
 
-      return [
+      return makeZeroVariableClockData([
         makeSetNumberDiff(state, 'ip', newIp),
         makeSetNumberDiff(state, 'cs', newCs),
         makeSetNumberDiff(state, 'sp', newSp),
-      ];
+      ]);
     }
 
     case 'retIntersegment': {
@@ -1115,11 +1144,11 @@ function simulateInstructionDiff(
 
       const newSp = state.sp + 4;
 
-      return [
+      return makeZeroVariableClockData([
         makeSetNumberDiff(state, 'ip', newIp),
         makeSetNumberDiff(state, 'cs', newCs),
         makeSetNumberDiff(state, 'sp', newSp),
-      ];
+      ]);
     }
 
     case 'intType3':
@@ -1128,22 +1157,45 @@ function simulateInstructionDiff(
     case 'intTypeSpecified':
       return makeInterruptDiff(state, instruction.op1);
 
-    case 'loopneLoopWhileNotEqual':
-      return makeLoopDiff(state, instruction, state.cx - 1 !== 0 && !state.zeroFlag);
+    case 'loopneLoopWhileNotEqual': {
+      const condition = state.cx - 1 !== 0 && !state.zeroFlag;
 
-    case 'loopeLoopWhileEqual':
-      return makeLoopDiff(state, instruction, state.cx - 1 !== 0 && state.zeroFlag);
+      return {
+        diff: makeLoopDiff(state, instruction, condition),
+        variableClockCountEstimate: condition ? 14 : 0, // 19 - 5
+      };
+    }
 
-    case 'loopLoopCxTimes':
-      return makeLoopDiff(state, instruction, state.cx - 1 !== 0);
+    case 'loopeLoopWhileEqual': {
+      const condition = state.cx - 1 !== 0 && state.zeroFlag;
+
+      return {
+        diff: makeLoopDiff(state, instruction, condition),
+        variableClockCountEstimate: condition ? 12 : 0, // 18 - 6
+      };
+    }
+
+    case 'loopLoopCxTimes': {
+      const condition = state.cx - 1 !== 0;
+
+      return {
+        diff: makeLoopDiff(state, instruction, condition),
+        variableClockCountEstimate: condition ? 12 : 0, // 17 - 5
+      };
+    }
 
     case 'jcxzJumpOnCxZero':
       return state.cx === 0
-        ? [makeSetNumberDiff(state, 'ip', state.ip + instruction.byteLength + instruction.op1)]
-        : [makeNextInstructionDiff(state, instruction.byteLength)];
+        ? {
+            diff: [
+              makeSetNumberDiff(state, 'ip', state.ip + instruction.byteLength + instruction.op1),
+            ],
+            variableClockCountEstimate: 12, // 18 - 6
+          }
+        : makeZeroVariableClockData([makeNextInstructionDiff(state, instruction.byteLength)]);
 
     default:
-      return [];
+      return makeZeroVariableClockData([]);
   }
 }
 
@@ -1181,10 +1233,13 @@ function makeShortLabelJumpDiff(
   state: ReadonlySimulationState,
   instruction: { op1: number; byteLength: number },
   condition: boolean,
-): SimulationStateDiff {
+): SimulatedInstructionData {
   return condition
-    ? [makeSetNumberDiff(state, 'ip', state.ip + instruction.byteLength + instruction.op1)]
-    : [makeNextInstructionDiff(state, instruction.byteLength)];
+    ? {
+        diff: [makeSetNumberDiff(state, 'ip', state.ip + instruction.byteLength + instruction.op1)],
+        variableClockCountEstimate: 12, // 16 (conditional clocks) - 4 (min clocks)
+      }
+    : makeZeroVariableClockData([makeNextInstructionDiff(state, instruction.byteLength)]);
 }
 
 function makeAddDiffs(
@@ -1194,7 +1249,7 @@ function makeAddDiffs(
   word: boolean,
   instructionLength: number,
   updateCarry = true,
-): SimulationStateDiff {
+): SimulatedInstructionData {
   const destValue = getRegisterOrEacValue(state, dest, word, 'ds');
 
   const auxCarry = (destValue & 0b1111) + (sourceValue & 0b1111) > 0b1111;
@@ -1213,11 +1268,11 @@ function makeAddDiffs(
 
   const overflow = getOverflowFlag(destValue, sourceValue, result, max);
 
-  return [
+  return makeZeroVariableClockData([
     makeNextInstructionDiff(state, instructionLength),
     ...makeSetRegisterOrMemoryValueDiffs(state, dest, result, word, 'ds'),
     ...makeFlagDiffsForArithmeticOp(state, result, overflow, word, auxCarry, carry),
-  ];
+  ]);
 }
 
 function makeOrDiffs(
@@ -1226,16 +1281,16 @@ function makeOrDiffs(
   sourceValue: number,
   word: boolean,
   instructionLength: number,
-): SimulationStateDiff {
+): SimulatedInstructionData {
   const destValue = getRegisterOrEacValue(state, dest, word, 'ds');
 
   const result = destValue | sourceValue;
 
-  return [
+  return makeZeroVariableClockData([
     makeNextInstructionDiff(state, instructionLength),
     ...makeSetRegisterOrMemoryValueDiffs(state, dest, result, word, 'ds'),
     ...makeFlagDiffsForLogicalOp(state, result, word),
-  ];
+  ]);
 }
 
 function makeAndDiffs(
@@ -1244,14 +1299,14 @@ function makeAndDiffs(
   sourceValue: number,
   word: boolean,
   instructionLength: number,
-): SimulationStateDiff {
+): SimulatedInstructionData {
   const { result, flagDiffs } = makeAndTestResults(state, dest, sourceValue, word);
 
-  return [
+  return makeZeroVariableClockData([
     makeNextInstructionDiff(state, instructionLength),
     ...makeSetRegisterOrMemoryValueDiffs(state, dest, result, word, 'ds'),
     ...flagDiffs,
-  ];
+  ]);
 }
 
 function makeTestDiffs(
@@ -1260,10 +1315,13 @@ function makeTestDiffs(
   sourceValue: number,
   word: boolean,
   instructionLength: number,
-): SimulationStateDiff {
+): SimulatedInstructionData {
   const { flagDiffs } = makeAndTestResults(state, dest, sourceValue, word);
 
-  return [makeNextInstructionDiff(state, instructionLength), ...flagDiffs];
+  return makeZeroVariableClockData([
+    makeNextInstructionDiff(state, instructionLength),
+    ...flagDiffs,
+  ]);
 }
 
 function makeAndTestResults(
@@ -1291,16 +1349,16 @@ function makeXorDiffs(
   sourceValue: number,
   word: boolean,
   instructionLength: number,
-): SimulationStateDiff {
+): SimulatedInstructionData {
   const destValue = getRegisterOrEacValue(state, dest, word, 'ds');
 
   const result = destValue ^ sourceValue;
 
-  return [
+  return makeZeroVariableClockData([
     makeNextInstructionDiff(state, instructionLength),
     ...makeSetRegisterOrMemoryValueDiffs(state, dest, result, word, 'ds'),
     ...makeFlagDiffsForLogicalOp(state, result, word),
-  ];
+  ]);
 }
 
 function makeSubDiffs(
@@ -1310,14 +1368,14 @@ function makeSubDiffs(
   word: boolean,
   instructionLength: number,
   updateCarry = true,
-): SimulationStateDiff {
+): SimulatedInstructionData {
   const { result, flagDiffs } = makeSubOrCmpResults(state, dest, sourceValue, word, updateCarry);
 
-  return [
+  return makeZeroVariableClockData([
     makeNextInstructionDiff(state, instructionLength),
     ...makeSetRegisterOrMemoryValueDiffs(state, dest, result, word, 'ds'),
     ...flagDiffs,
-  ];
+  ]);
 }
 
 function makeCmpDiffs(
@@ -1326,10 +1384,13 @@ function makeCmpDiffs(
   sourceValue: number,
   word: boolean,
   instructionLength: number,
-): SimulationStateDiff {
+): SimulatedInstructionData {
   const { flagDiffs } = makeSubOrCmpResults(state, dest, sourceValue, word);
 
-  return [makeNextInstructionDiff(state, instructionLength), ...flagDiffs];
+  return makeZeroVariableClockData([
+    makeNextInstructionDiff(state, instructionLength),
+    ...flagDiffs,
+  ]);
 }
 
 interface SubOrCmpResults {
@@ -1388,50 +1449,50 @@ function makeXchgDiffs(
   otherOperand: RegisterOrEac,
   word: boolean,
   instructionLength: number,
-): SimulationStateDiff {
+): SimulatedInstructionData {
   const registerValue = getRegisterValue(state, registerOperand);
 
   const otherValue = getRegisterOrEacValue(state, otherOperand, word, 'ds');
 
-  return [
+  return makeZeroVariableClockData([
     makeNextInstructionDiff(state, instructionLength),
     makeSetRegisterValueDiff(state, registerOperand, otherValue),
     ...makeSetRegisterOrMemoryValueDiffs(state, otherOperand, registerValue, word, 'ds'),
-  ];
+  ]);
 }
 
 function makePushDiffs(
   state: ReadonlySimulationState,
   register: SegmentRegister | WordRegisterName,
   instructionLength: number,
-): SimulationStateDiff {
+): SimulatedInstructionData {
   const newSp = state.sp - 2;
 
   const stackAddress = getMemoryAddress(state, newSp, 'ss');
 
-  return [
+  return makeZeroVariableClockData([
     makeNextInstructionDiff(state, instructionLength),
     makeSetNumberDiff(state, 'sp', newSp),
     ...makeSetMemoryValueDiffs(state, stackAddress, state[register], true),
-  ];
+  ]);
 }
 
 function makePopDiffs(
   state: ReadonlySimulationState,
   dest: SegmentRegister | WordRegisterName | RegisterOrEac,
   instructionLength: number,
-): SimulationStateDiff {
+): SimulatedInstructionData {
   const stackAddress = getMemoryAddress(state, state.sp, 'ss');
 
   const value = state.memory.readWord(stackAddress);
 
-  return [
+  return makeZeroVariableClockData([
     makeNextInstructionDiff(state, instructionLength),
     makeSetNumberDiff(state, 'sp', state.sp + 2),
     ...(typeof dest === 'string'
       ? [makeSetNumberDiff(state, dest, value)]
       : makeSetRegisterOrMemoryValueDiffs(state, dest, value, true, 'ds')),
-  ];
+  ]);
 }
 
 function* makeRepMovsMemoryDiffs(
@@ -1460,7 +1521,7 @@ function makeLoadPointerDiffs(
   eac: EffectiveAddressCalculation,
   register: WordRegisterName,
   segmentRegister: SegmentRegister,
-): SimulationStateDiff {
+): SimulatedInstructionData {
   const newRegisterValue = getMemoryValueFromEac(state, eac, true, 'ds');
 
   const newSegmentRegisterValue = getMemoryValueFromEac(
@@ -1470,10 +1531,10 @@ function makeLoadPointerDiffs(
     'ds',
   );
 
-  return [
+  return makeZeroVariableClockData([
     makeSetNumberDiff(state, register, newRegisterValue),
     makeSetNumberDiff(state, segmentRegister, newSegmentRegisterValue),
-  ];
+  ]);
 }
 
 function getStringInstructionAddresses(
@@ -1507,7 +1568,7 @@ function* makeStringInstructionRegisterDiffs(
 function makeInterruptDiff(
   state: ReadonlySimulationState,
   interruptType: number,
-): SimulationStateDiff {
+): SimulatedInstructionData {
   const flagsValue = getFlagsValue(state);
 
   const interruptPointerAddress = interruptType * 4;
@@ -1518,7 +1579,7 @@ function makeInterruptDiff(
   const newSp = state.sp - 6;
   const newStackAddress = getMemoryAddress(state, newSp, 'ss');
 
-  return [
+  return makeZeroVariableClockData([
     makeSetNumberDiff(state, 'ip', newIp),
     makeSetNumberDiff(state, 'cs', newCs),
     makeSetNumberDiff(state, 'sp', newSp),
@@ -1527,7 +1588,7 @@ function makeInterruptDiff(
     ...makeSetMemoryValueDiffs(state, newStackAddress + 4, flagsValue, true),
     makeSetFlagDiff(state, 'trapFlag', false),
     makeSetFlagDiff(state, 'interruptFlag', false),
-  ];
+  ]);
 }
 
 // https://en.wikipedia.org/wiki/Overflow_flag
@@ -1838,6 +1899,13 @@ function applyDiff(state: SimulationState, diff: SimulationStateDiff): void {
       state.memory.writeByte(propertyDiff.address, propertyDiff.to);
     }
   }
+}
+
+function makeZeroVariableClockData(diff: SimulationStateDiff): SimulatedInstructionData {
+  return {
+    diff,
+    variableClockCountEstimate: 0,
+  };
 }
 
 /**

@@ -1,12 +1,18 @@
 @use './sass/colors.scss';
 
 $asm-width: 220px;
-$gap: 8px;
+$clock-count-width: 40px;
 $flags-width: 300px;
+$gap: 8px;
 
 :host {
   display: grid;
-  grid-template-columns: $asm-width calc(100% - $gap - $asm-width - $gap - $flags-width) $flags-width;
+  grid-template-columns:
+    $asm-width $clock-count-width $clock-count-width calc(
+      100% - $gap - $asm-width - $gap - $clock-count-width - $gap - $clock-count-width - $gap -
+        $flags-width
+    )
+    $flags-width;
   gap: $gap;
   padding: 5px 0;
 

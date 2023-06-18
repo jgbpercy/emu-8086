@@ -4,7 +4,33 @@ import { clReg, isWordRegister } from './register-data';
 const immediateToRegisterStandardClockCount = 4;
 const shortLabelJumpBaseClockCount = 4;
 
-export function getMinClockCountEstimate(instruction: DecodedInstruction): number {
+export interface MinClockCountEstimateSettings {
+  readonly treatZeroDisplacementAsNoDisplacement?: boolean;
+}
+
+const defaultSettings: Required<MinClockCountEstimateSettings> = {
+  treatZeroDisplacementAsNoDisplacement: true,
+};
+
+export function getMinClockCountEstimate(
+  instruction: DecodedInstruction,
+  settings: MinClockCountEstimateSettings = defaultSettings,
+): number {
+  const _settings: Required<MinClockCountEstimateSettings> = { ...defaultSettings, ...settings };
+
+  let clocks = getMinClockCountEstimateWithoutLock(instruction, _settings);
+
+  if ('lock' in instruction && instruction.lock) {
+    clocks += 2;
+  }
+
+  return clocks;
+}
+
+export function getMinClockCountEstimateWithoutLock(
+  instruction: DecodedInstruction,
+  settings: Required<MinClockCountEstimateSettings>,
+): number {
   switch (instruction.kind) {
     case 'addRegisterMemoryWithRegisterToEither':
     case 'orRegisterMemoryAndRegisterToEither':
@@ -13,14 +39,18 @@ export function getMinClockCountEstimate(instruction: DecodedInstruction): numbe
     case 'andRegisterMemoryWithRegisterToEither':
     case 'subRegisterMemoryAndRegisterToEither':
     case 'xorRegisterMemoryAndRegisterToEither':
-      return getStandardRegisterMemoryAndRegisterClockCount(instruction);
+      return getStandardRegisterMemoryAndRegisterClockCount(instruction, settings);
 
     case 'cmpRegisterMemoryAndRegister':
-      return getNonStandardRegisterMemoryAndRegisterClockCount(instruction, {
-        regReg: 3,
-        regMem: 9,
-        memReg: 9,
-      });
+      return getNonStandardRegisterMemoryAndRegisterClockCount(
+        instruction,
+        {
+          regReg: 3,
+          regMem: 9,
+          memReg: 9,
+        },
+        settings,
+      );
 
     case 'addImmediateToAccumulator':
     case 'orImmediateToAccumulator':
@@ -87,13 +117,13 @@ export function getMinClockCountEstimate(instruction: DecodedInstruction): numbe
     case 'andImmediateToRegisterMemory':
     case 'subImmediateToRegisterMemory':
     case 'xorImmediateToRegisterMemory':
-      return getStandardImmediateToRegisterMemoryClockCount(instruction);
+      return getStandardImmediateToRegisterMemoryClockCount(instruction, settings);
 
     case 'cmpImmediateToRegisterMemory': {
       if (instruction.op1.kind === 'reg') {
         return immediateToRegisterStandardClockCount;
       } else {
-        return 10 + getEacClockCount(instruction.op1);
+        return 10 + getEacClockCount(instruction.op1, settings);
       }
     }
 
@@ -103,40 +133,52 @@ export function getMinClockCountEstimate(instruction: DecodedInstruction): numbe
       // At time of writing this comment the decoder throws if we see a mem source (second) operand
       // Whatever the case, 2-21 seems to be pretty clearly saying that a reg operand
       // and a mem operand have clock count 9
-      return getNonStandardRegisterMemoryAndRegisterClockCount(instruction, {
-        regReg: 3,
-        memReg: 9,
-        regMem: 9,
-      });
+      return getNonStandardRegisterMemoryAndRegisterClockCount(
+        instruction,
+        {
+          regReg: 3,
+          memReg: 9,
+          regMem: 9,
+        },
+        settings,
+      );
 
     case 'xchgRegisterMemoryWithRegister':
-      return getNonStandardRegisterMemoryAndRegisterClockCount(instruction, {
-        regReg: 3,
-        memReg: 17,
-        regMem: 17,
-      });
+      return getNonStandardRegisterMemoryAndRegisterClockCount(
+        instruction,
+        {
+          regReg: 3,
+          memReg: 17,
+          regMem: 17,
+        },
+        settings,
+      );
 
     case 'movRegisterMemoryToFromRegister':
-      return getNonStandardRegisterMemoryAndRegisterClockCount(instruction, {
-        regReg: 2,
-        regMem: 8,
-        memReg: 9,
-      });
+      return getNonStandardRegisterMemoryAndRegisterClockCount(
+        instruction,
+        {
+          regReg: 2,
+          regMem: 8,
+          memReg: 9,
+        },
+        settings,
+      );
 
     case 'movSegmentRegisterToRegisterMemory':
-      return instruction.op1.kind === 'reg' ? 2 : 9 + getEacClockCount(instruction.op1);
+      return instruction.op1.kind === 'reg' ? 2 : 9 + getEacClockCount(instruction.op1, settings);
 
     case 'leaLoadEaToRegister':
-      return 2 + getEacClockCount(instruction.op2);
+      return 2 + getEacClockCount(instruction.op2, settings);
 
     case 'movRegisterMemoryToSegmentRegister':
-      return instruction.op2.kind === 'reg' ? 2 : 8 + getEacClockCount(instruction.op2);
+      return instruction.op2.kind === 'reg' ? 2 : 8 + getEacClockCount(instruction.op2, settings);
 
     case 'popRegisterMemory': {
       if (instruction.op1.kind === 'reg') {
         return 8;
       } else {
-        return 17 + getEacClockCount(instruction.op1);
+        return 17 + getEacClockCount(instruction.op1, settings);
       }
     }
 
@@ -202,15 +244,15 @@ export function getMinClockCountEstimate(instruction: DecodedInstruction): numbe
       return 8;
 
     case 'lesLoadPointerToEs':
-      return 16 + getEacClockCount(instruction.op2);
+      return 16 + getEacClockCount(instruction.op2, settings);
 
     case 'ldsLoadPointerToDs':
-      return 16 + getEacClockCount(instruction.op2);
+      return 16 + getEacClockCount(instruction.op2, settings);
 
     case 'movImmediateToRegisterMemory':
       return instruction.op1.kind === 'reg'
         ? immediateToRegisterStandardClockCount
-        : 10 + getEacClockCount(instruction.op1);
+        : 10 + getEacClockCount(instruction.op1, settings);
 
     case 'retIntersegmentAddingImmediateToSp':
       // Manual claims that inter-segment with pop is cheaper than without pop? :/
@@ -238,7 +280,7 @@ export function getMinClockCountEstimate(instruction: DecodedInstruction): numbe
     case 'salShiftLogicalArithmeticLeft':
     case 'shrShiftLogicalRight':
     case 'sarShiftArithmeticRight':
-      return getLogicWithOneOrClClockCount(instruction);
+      return getLogicWithOneOrClClockCount(instruction, settings);
 
     case 'aamAsciiAdjustForMultiply':
       return 83;
@@ -250,7 +292,7 @@ export function getMinClockCountEstimate(instruction: DecodedInstruction): numbe
       return 11;
 
     case 'escEscapeToExternalDevice':
-      return instruction.op2.kind === 'reg' ? 2 : 8 + getEacClockCount(instruction.op2);
+      return instruction.op2.kind === 'reg' ? 2 : 8 + getEacClockCount(instruction.op2, settings);
 
     case 'loopneLoopWhileNotEqual':
       return 5;
@@ -287,45 +329,61 @@ export function getMinClockCountEstimate(instruction: DecodedInstruction): numbe
       return 2;
 
     case 'testImmediateDataAndRegisterMemory':
-      return instruction.op1.kind === 'reg' ? 5 : 11 + getEacClockCount(instruction.op1);
+      return instruction.op1.kind === 'reg' ? 5 : 11 + getEacClockCount(instruction.op1, settings);
 
     case 'notInvert':
-      return instruction.op1.kind === 'reg' ? 3 : 16 + getEacClockCount(instruction.op1);
+      return instruction.op1.kind === 'reg' ? 3 : 16 + getEacClockCount(instruction.op1, settings);
 
     case 'negChangeSign':
-      return instruction.op1.kind === 'reg' ? 3 : 16 + getEacClockCount(instruction.op1);
+      return instruction.op1.kind === 'reg' ? 3 : 16 + getEacClockCount(instruction.op1, settings);
 
     case 'mulMultiplyUnsigned':
-      return getMultiplyDivideClockCount(instruction, {
-        reg8: 70,
-        reg16: 118,
-        mem8: 76,
-        mem16: 124,
-      });
+      return getMultiplyDivideClockCount(
+        instruction,
+        {
+          reg8: 70,
+          reg16: 118,
+          mem8: 76,
+          mem16: 124,
+        },
+        settings,
+      );
 
     case 'imulIntegerMultiplySigned':
-      return getMultiplyDivideClockCount(instruction, {
-        reg8: 80,
-        reg16: 128,
-        mem8: 86,
-        mem16: 134,
-      });
+      return getMultiplyDivideClockCount(
+        instruction,
+        {
+          reg8: 80,
+          reg16: 128,
+          mem8: 86,
+          mem16: 134,
+        },
+        settings,
+      );
 
     case 'divDivideUnsigned':
-      return getMultiplyDivideClockCount(instruction, {
-        reg8: 80,
-        reg16: 114,
-        mem8: 86,
-        mem16: 150,
-      });
+      return getMultiplyDivideClockCount(
+        instruction,
+        {
+          reg8: 80,
+          reg16: 114,
+          mem8: 86,
+          mem16: 150,
+        },
+        settings,
+      );
 
     case 'idivIntegerDivideSigned':
-      return getMultiplyDivideClockCount(instruction, {
-        reg8: 101,
-        reg16: 165,
-        mem8: 107,
-        mem16: 171,
-      });
+      return getMultiplyDivideClockCount(
+        instruction,
+        {
+          reg8: 101,
+          reg16: 165,
+          mem8: 107,
+          mem16: 171,
+        },
+        settings,
+      );
 
     case 'clcClearCarry':
     case 'stcSetCarry':
@@ -340,24 +398,24 @@ export function getMinClockCountEstimate(instruction: DecodedInstruction): numbe
       if (instruction.op1.kind === 'reg') {
         return isWordRegister(instruction.op1) ? 2 : 3;
       } else {
-        return 15 + getEacClockCount(instruction.op1);
+        return 15 + getEacClockCount(instruction.op1, settings);
       }
     }
 
     case 'callIndirectWithinSegment':
-      return instruction.op1.kind === 'reg' ? 16 : 21 + getEacClockCount(instruction.op1);
+      return instruction.op1.kind === 'reg' ? 16 : 21 + getEacClockCount(instruction.op1, settings);
 
     case 'callIndirectIntersegment':
-      return 37 + getEacClockCount(instruction.op1);
+      return 37 + getEacClockCount(instruction.op1, settings);
 
     case 'jmpIndirectWithinSegment':
-      return instruction.op1.kind === 'reg' ? 11 : 18 + getEacClockCount(instruction.op1);
+      return instruction.op1.kind === 'reg' ? 11 : 18 + getEacClockCount(instruction.op1, settings);
 
     case 'jmpIndirectIntersegment':
-      return 24 + getEacClockCount(instruction.op1);
+      return 24 + getEacClockCount(instruction.op1, settings);
 
     case 'pushRegisterMemory':
-      return instruction.op1.kind === 'reg' ? 11 : 16 + getEacClockCount(instruction.op1);
+      return instruction.op1.kind === 'reg' ? 11 : 16 + getEacClockCount(instruction.op1, settings);
 
     case 'NOT USED':
     case 'UNKNOWN':
@@ -365,15 +423,22 @@ export function getMinClockCountEstimate(instruction: DecodedInstruction): numbe
   }
 }
 
-function getStandardRegisterMemoryAndRegisterClockCount(instruction: {
-  readonly op1: RegisterOrEac;
-  readonly op2: RegisterOrEac;
-}): number {
-  return getNonStandardRegisterMemoryAndRegisterClockCount(instruction, {
-    regReg: 3,
-    regMem: 9,
-    memReg: 16,
-  });
+function getStandardRegisterMemoryAndRegisterClockCount(
+  instruction: {
+    readonly op1: RegisterOrEac;
+    readonly op2: RegisterOrEac;
+  },
+  settings: Required<MinClockCountEstimateSettings>,
+): number {
+  return getNonStandardRegisterMemoryAndRegisterClockCount(
+    instruction,
+    {
+      regReg: 3,
+      regMem: 9,
+      memReg: 16,
+    },
+    settings,
+  );
 }
 
 function getNonStandardRegisterMemoryAndRegisterClockCount(
@@ -386,35 +451,42 @@ function getNonStandardRegisterMemoryAndRegisterClockCount(
     readonly regMem: number;
     readonly memReg: number;
   },
+  settings: Required<MinClockCountEstimateSettings>,
 ): number {
   if (instruction.op1.kind === 'reg' && instruction.op2.kind === 'reg') {
     return baseValues.regReg;
   } else if (instruction.op1.kind === 'mem') {
-    return baseValues.memReg + getEacClockCount(instruction.op1);
+    return baseValues.memReg + getEacClockCount(instruction.op1, settings);
   } else {
     if (instruction.op2.kind !== 'mem') {
       throw Error('Internal error - expected memory operand');
     }
 
-    return baseValues.regMem + getEacClockCount(instruction.op2);
+    return baseValues.regMem + getEacClockCount(instruction.op2, settings);
   }
 }
 
-function getStandardImmediateToRegisterMemoryClockCount(instruction: {
-  readonly op1: RegisterOrEac;
-  readonly op2: number;
-}): number {
+function getStandardImmediateToRegisterMemoryClockCount(
+  instruction: {
+    readonly op1: RegisterOrEac;
+    readonly op2: number;
+  },
+  settings: Required<MinClockCountEstimateSettings>,
+): number {
   if (instruction.op1.kind === 'reg') {
     return immediateToRegisterStandardClockCount;
   } else {
-    return 17 + getEacClockCount(instruction.op1);
+    return 17 + getEacClockCount(instruction.op1, settings);
   }
 }
 
-function getLogicWithOneOrClClockCount(instruction: {
-  readonly op1: RegisterOrEac;
-  readonly op2: 1 | typeof clReg;
-}): number {
+function getLogicWithOneOrClClockCount(
+  instruction: {
+    readonly op1: RegisterOrEac;
+    readonly op2: 1 | typeof clReg;
+  },
+  settings: Required<MinClockCountEstimateSettings>,
+): number {
   if (instruction.op1.kind === 'reg') {
     if (instruction.op2 === 1) {
       return 2;
@@ -422,7 +494,7 @@ function getLogicWithOneOrClClockCount(instruction: {
       return 8;
     }
   } else {
-    const eacClocks = getEacClockCount(instruction.op1);
+    const eacClocks = getEacClockCount(instruction.op1, settings);
 
     if (instruction.op2 === 1) {
       return 15 + eacClocks;
@@ -442,6 +514,7 @@ function getMultiplyDivideClockCount(
     readonly mem8: number;
     readonly mem16: number;
   },
+  settings: Required<MinClockCountEstimateSettings>,
 ): number {
   if (instruction.op1.kind === 'reg') {
     if (isWordRegister(instruction.op1)) {
@@ -450,7 +523,7 @@ function getMultiplyDivideClockCount(
       return baseValues.reg8;
     }
   } else {
-    const eacClocks = getEacClockCount(instruction.op1);
+    const eacClocks = getEacClockCount(instruction.op1, settings);
 
     if (instruction.op1.length === 2) {
       return baseValues.mem16 + eacClocks;
@@ -460,7 +533,22 @@ function getMultiplyDivideClockCount(
   }
 }
 
-function getEacClockCount(eac: EffectiveAddressCalculation): number {
+function getEacClockCount(
+  eac: EffectiveAddressCalculation,
+  settings: Required<MinClockCountEstimateSettings>,
+): number {
+  // I think zero displacement probably gets counted as present for the purposes of clock count
+  // Can't see the processor being smart enough not to do the addition if the value is there but zero
+  // This matters because for bp, displacement must be encoded, because its "slot" in mod-reg-rm encoding for
+  // no displacement is taken up by direct address
+  // However, I might be wrong and Casey's simulator seems to treat [bp] as 5 clocks rather than 9 so...
+  let noDisplacement: boolean;
+  if (settings.treatZeroDisplacementAsNoDisplacement) {
+    noDisplacement = eac.displacement === 0 || eac.displacement === null;
+  } else {
+    noDisplacement = eac.displacement === null;
+  }
+
   let cycleCountWithoutSegmentOverride: number;
   switch (eac.calculationKind) {
     case 'DIRECT ADDRESS':
@@ -470,15 +558,15 @@ function getEacClockCount(eac: EffectiveAddressCalculation): number {
     case 'bp':
     case 'si':
     case 'di':
-      cycleCountWithoutSegmentOverride = eac.displacement === null ? 5 : 9;
+      cycleCountWithoutSegmentOverride = noDisplacement ? 5 : 9;
       break;
     case 'bp + di':
     case 'bx + si':
-      cycleCountWithoutSegmentOverride = eac.displacement === null ? 7 : 11;
+      cycleCountWithoutSegmentOverride = noDisplacement ? 7 : 11;
       break;
     case 'bp + si':
     case 'bx + di':
-      cycleCountWithoutSegmentOverride = eac.displacement === null ? 8 : 12;
+      cycleCountWithoutSegmentOverride = noDisplacement ? 8 : 12;
       break;
   }
 
