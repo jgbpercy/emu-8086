@@ -16,7 +16,7 @@ import { Memory, total8086MemorySizeInBytes } from './memory';
 import { NumPipe, printNum } from './num.pipe';
 import { SimulatedInstructionComponent } from './simulated-instruction.component';
 import { SimulatedInstructionUiData, caseyPrint } from './simulation-printer';
-import { SimulationState, simulateInstruction } from './simulator';
+import { Ports, SimulationState, simulateInstruction } from './simulator';
 import { valueChangesWithInitial } from './value-changes-with-initial';
 
 /* TODO:
@@ -100,6 +100,7 @@ export class AppComponent implements AfterViewInit {
     carryFlag: false,
 
     memory: new Memory(),
+    ports: new Ports(),
   };
 
   readonly memoryAddressFormArray = this.fb.array<FormControl<string>>([

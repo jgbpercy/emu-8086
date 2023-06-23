@@ -41,12 +41,39 @@ interface _SimulationStatePrimatives {
   carryFlag: boolean;
 }
 
+export class Ports implements ReadonlyPorts {
+  private readonly ports = new Map<number, number>();
+
+  set(address: number, val: number): void {
+    if (val < 0 || val > 65535 || !Number.isInteger(val)) {
+      throw Error(`Internal error - Invalid port value: ${val}`);
+    }
+
+    this.ports.set(address, val);
+  }
+
+  getByte(address: number): number {
+    return (this.ports.get(address) ?? 0) & 0xff;
+  }
+
+  getWord(address: number): number {
+    return this.ports.get(address) ?? 0;
+  }
+}
+
+export interface ReadonlyPorts {
+  getByte(address: number): number;
+  getWord(address: number): number;
+}
+
 export type SimulationState = _SimulationStatePrimatives & {
   readonly memory: Memory;
+  readonly ports: Ports;
 };
 
 export type ReadonlySimulationState = Readonly<_SimulationStatePrimatives> & {
   readonly memory: ReadonlyMemory;
+  readonly ports: ReadonlyPorts;
 };
 
 export interface GenericSimulationStatePropertyDiff<T> {
@@ -61,10 +88,17 @@ export interface MemoryDiff {
   readonly to: number;
 }
 
+export interface PortDiff {
+  readonly port: number;
+  readonly from: number;
+  readonly to: number;
+}
+
 export type SimulationStatePropertyDiff =
   | GenericSimulationStatePropertyDiff<number>
   | GenericSimulationStatePropertyDiff<boolean>
-  | MemoryDiff;
+  | MemoryDiff
+  | PortDiff;
 
 export type SimulationStateDiff = ReadonlyArray<SimulationStatePropertyDiff>;
 
@@ -1194,6 +1228,26 @@ function getSimulatedInstructionData(
           }
         : makeZeroVariableClockData([makeNextInstructionDiff(state, instruction.byteLength)]);
 
+    case 'inFixedPort': {
+      const value = isWordRegister(instruction.op1)
+        ? state.ports.getWord(instruction.op2)
+        : state.ports.getByte(instruction.op2);
+
+      return makeZeroVariableClockData([
+        makeNextInstructionDiff(state, instruction.byteLength),
+        makeSetNumberDiff(state, 'ax', value),
+      ]);
+    }
+
+    case 'outFixedPort': {
+      const value = isWordRegister(instruction.op2) ? state[instruction.op2.name] : state.ax & 0xff;
+
+      return makeZeroVariableClockData([
+        makeNextInstructionDiff(state, instruction.byteLength),
+        makeSetPortDiff(state, instruction.op1, value),
+      ]);
+    }
+
     default:
       return makeZeroVariableClockData([]);
   }
@@ -1889,14 +1943,24 @@ function makeSetMemoryValueDiff(
   };
 }
 
+function makeSetPortDiff(state: ReadonlySimulationState, port: number, value: number): PortDiff {
+  return {
+    port,
+    from: state.ports.getWord(port),
+    to: value,
+  };
+}
+
 function applyDiff(state: SimulationState, diff: SimulationStateDiff): void {
   for (const propertyDiff of diff) {
     if ('key' in propertyDiff) {
       // @ts-expect-error the type of SimulationStatePropertyDiff guarantees that we've got the correct
       // relationship between the key and the type of to (or from), but TS doesn't understand that relationship
       state[propertyDiff.key] = propertyDiff.to;
-    } else {
+    } else if ('address' in propertyDiff) {
       state.memory.writeByte(propertyDiff.address, propertyDiff.to);
+    } else {
+      state.ports.set(propertyDiff.port, propertyDiff.to);
     }
   }
 }
