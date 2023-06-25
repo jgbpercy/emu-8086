@@ -1231,7 +1231,7 @@ function getSimulatedInstructionData(
     case 'inFixedPort': {
       const value = isWordRegister(instruction.op1)
         ? state.ports.getWord(instruction.op2)
-        : state.ports.getByte(instruction.op2);
+        : state.ax & 0xff00 & state.ports.getByte(instruction.op2);
 
       return makeZeroVariableClockData([
         makeNextInstructionDiff(state, instruction.byteLength),
@@ -1245,6 +1245,94 @@ function getSimulatedInstructionData(
       return makeZeroVariableClockData([
         makeNextInstructionDiff(state, instruction.byteLength),
         makeSetPortDiff(state, instruction.op1, value),
+      ]);
+    }
+
+    case 'callDirectWithinSegment': {
+      const newSp = state.sp + 2;
+
+      const nextInstructionIp = state.ip + instruction.byteLength;
+
+      return makeZeroVariableClockData([
+        makeSetNumberDiff(state, 'ip', (nextInstructionIp + instruction.op1) % 65536),
+        makeSetNumberDiff(state, 'sp', newSp),
+        ...makeSetMemoryValueDiffs(state, newSp, nextInstructionIp, true),
+      ]);
+    }
+
+    case 'jmpDirectWithinSegment':
+    case 'jmpDirectWithinSegmentShort': {
+      return makeZeroVariableClockData([
+        makeSetNumberDiff(
+          state,
+          'ip',
+          (state.ip + instruction.byteLength + instruction.op1) % 65535,
+        ),
+      ]);
+    }
+
+    case 'jmpDirectIntersegment': {
+      return makeZeroVariableClockData([
+        makeSetNumberDiff(state, 'ip', instruction.op1),
+        makeSetNumberDiff(state, 'cs', instruction.op2),
+      ]);
+    }
+
+    case 'inVariablePort': {
+      const value = isWordRegister(instruction.op1)
+        ? state.ports.getWord(state.dx)
+        : state.ax & 0xff00 & state.ports.getByte(state.dx);
+
+      return makeZeroVariableClockData([
+        makeNextInstructionDiff(state, instruction.byteLength),
+        makeSetNumberDiff(state, 'ax', value),
+      ]);
+    }
+
+    case 'outVariablePort': {
+      const value = isWordRegister(instruction.op1) ? state[instruction.op1.name] : state.ax & 0xff;
+
+      return makeZeroVariableClockData([
+        makeNextInstructionDiff(state, instruction.byteLength),
+        makeSetPortDiff(state, state.dx, value),
+      ]);
+    }
+
+    case 'hltHalt':
+      return makeZeroVariableClockData([makeNextInstructionDiff(state, instruction.byteLength)]); // TODO? :p
+
+    case 'cmcComplementCarry':
+      return makeZeroVariableClockData([
+        makeNextInstructionDiff(state, instruction.byteLength),
+        makeSetFlagDiff(state, 'carryFlag', !state.carryFlag),
+      ]);
+
+    case 'testImmediateDataAndRegisterMemory':
+      return makeTestDiffs(
+        state,
+        instruction.op1,
+        instruction.op2,
+        instruction.op1.kind === 'reg'
+          ? isWordRegister(instruction.op1)
+          : instruction.op1.length === 2,
+        instruction.byteLength,
+      );
+
+    case 'notInvert': {
+      const word =
+        instruction.op1.kind === 'reg'
+          ? isWordRegister(instruction.op1)
+          : instruction.op1.length === 2;
+
+      const currentValue = getRegisterOrEacValue(state, instruction.op1, word, 'ds');
+
+      const mask = word ? 0xffff : 0xff;
+
+      const newValue = ~currentValue & mask;
+
+      return makeZeroVariableClockData([
+        makeNextInstructionDiff(state, instruction.byteLength),
+        ...makeSetRegisterOrMemoryValueDiffs(state, instruction.op1, newValue, word, 'ds'),
       ]);
     }
 

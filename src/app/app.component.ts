@@ -33,6 +33,7 @@ import { valueChangesWithInitial } from './value-changes-with-initial';
  * - Step-through simulation
  * - Tests!
  * - Build in example instructions/programs
+ * - UI for in/out ports
  *
  * Fixes/improvements:
  * - Fix jump label asm printing to be nasm compatible
