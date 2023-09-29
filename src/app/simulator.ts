@@ -1336,6 +1336,63 @@ function getSimulatedInstructionData(
       ]);
     }
 
+    case 'negChangeSign': {
+      const word =
+        instruction.op1.kind === 'reg'
+          ? isWordRegister(instruction.op1)
+          : instruction.op1.length === 2;
+
+      const currentValue = getRegisterOrEacValue(state, instruction.op1, word, 'ds');
+
+      const { result, flagDiffs } = makeSubOrCmpResultsWithDestValue(
+        state,
+        0,
+        currentValue,
+        word,
+        true,
+      );
+
+      return makeZeroVariableClockData([
+        makeNextInstructionDiff(state, instruction.byteLength),
+        ...makeSetRegisterOrMemoryValueDiffs(state, instruction.op1, result, word, 'ds'),
+        ...flagDiffs,
+      ]);
+    }
+
+    case 'mulMultiplyUnsigned': {
+      const word =
+        instruction.op1.kind === 'reg'
+          ? isWordRegister(instruction.op1)
+          : instruction.op1.length === 2;
+
+      const sourceValue = getRegisterOrEacValue(state, instruction.op1, word, 'ds');
+
+      const destValue = word ? state.ax : state.ax & 0x00ff;
+
+      const result = sourceValue * destValue;
+
+      const max = word ? 65535 : 255;
+
+      const hasHighPart = result > max;
+
+      if (word) {
+        return makeZeroVariableClockData([
+          makeNextInstructionDiff(state, instruction.byteLength),
+          makeSetNumberDiff(state, 'ax', result & 0xffff),
+          makeSetNumberDiff(state, 'dx', result & 0xffff0000),
+          makeSetFlagDiff(state, 'overflowFlag', hasHighPart),
+          makeSetFlagDiff(state, 'carryFlag', hasHighPart),
+        ]);
+      } else {
+        return makeZeroVariableClockData([
+          makeNextInstructionDiff(state, instruction.byteLength),
+          makeSetNumberDiff(state, 'ax', result),
+          makeSetFlagDiff(state, 'overflowFlag', hasHighPart),
+          makeSetFlagDiff(state, 'carryFlag', hasHighPart),
+        ]);
+      }
+    }
+
     default:
       return makeZeroVariableClockData([]);
   }
@@ -1398,7 +1455,7 @@ function makeAddDiffs(
 
   let result = destValue + sourceValue;
 
-  const max = word ? 65536 : 128;
+  const max = word ? 65536 : 256;
 
   let carry: boolean | undefined = undefined;
 
@@ -1563,7 +1620,7 @@ function makeSubOrCmpResultsWithDestValue(
 
   let result = destValue - sourceValue;
 
-  const max = word ? 65536 : 128;
+  const max = word ? 65536 : 256;
 
   let carry: boolean | undefined = undefined;
 
@@ -1738,7 +1795,7 @@ function getOverflowFlag(
   destValue: number,
   sourceValue: number,
   result: number,
-  max: 128 | 65536,
+  max: 256 | 65536,
 ): boolean {
   const destSignBit = destValue >= max / 2;
   const sourceSignBit = sourceValue >= max / 2;
@@ -1972,7 +2029,7 @@ function makeSetSignFlagDiff(
   result: number,
   word: boolean,
 ): SimulationStatePropertyDiff {
-  const max = word ? 65536 : 128;
+  const max = word ? 65536 : 256;
   const value = (result & (max / 2)) !== 0;
 
   return makeSetFlagDiff(state, 'signFlag', value);
