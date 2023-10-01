@@ -1703,7 +1703,7 @@ function encodeModRmDisplacementForMemoryOperand(op: EffectiveAddressCalculation
     displacementBytes = 1;
     displacement.push({
       category: 'dispLo',
-      value: toTwosComplementBits(op.displacement),
+      value: op.displacement & 0xff,
       length: 8,
       isByteEnd: true,
     });
@@ -1808,7 +1808,7 @@ function encodeShortLabelJumpInstruction(
     },
     {
       category: 'ipInc8',
-      value: toTwosComplementBits(instruction.op1),
+      value: instruction.op1 & 0xff,
       length: 8,
       isByteEnd: false,
     },
@@ -1822,7 +1822,7 @@ function encodeData(word: boolean, value: number): ReadonlyArray<AnnotatedBits> 
     return [
       {
         category: 'dataLo',
-        value: toTwosComplementBits(value),
+        value: value & 0xff,
         length: 8,
         isByteEnd: true,
       },
@@ -1847,32 +1847,18 @@ function encodeInt16Literal(
   loCategory: 'dispLo' | 'dataLo' | 'segLo' | 'ipLo' | 'ipIncLo',
   hiCategory: 'dispHi' | 'dataHi' | 'segHi' | 'ipHi' | 'ipIncHi',
 ): ReadonlyArray<AnnotatedBits> {
-  const twosComplementBits = toTwosComplementBits(value16);
-
   return [
     {
       category: loCategory,
-      value: twosComplementBits & 0xff,
+      value: value16 & 0xff,
       length: 8,
       isByteEnd: true,
     },
     {
       category: hiCategory,
-      value: (twosComplementBits & 0xff00) >> 8,
+      value: (value16 & 0xff00) >> 8,
       length: 8,
       isByteEnd: true,
     },
   ];
-}
-
-function toTwosComplementBits(val: number): number {
-  if (val >= 0) {
-    return val;
-  }
-
-  if (val >= -128) {
-    return val + 256;
-  } else {
-    return val + 65536;
-  }
 }

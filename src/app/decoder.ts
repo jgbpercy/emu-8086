@@ -16,6 +16,7 @@ import {
   segmentRegisterDecodingTable,
   wordRegisterDecodingTable,
 } from './register-data';
+import { convertTwosComplementToSignedJsValue } from './twos-complement';
 
 export type Operand = Register | SegmentRegister | EffectiveAddressCalculation | number;
 
@@ -1585,7 +1586,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: shortLabelJumpInstructionTable[firstByte & 0b0000_1111],
-        op1: getAsTwosComplement(context.instructionBytes[context.index], 127),
+        op1: convertTwosComplementToSignedJsValue(context.instructionBytes[context.index], 127),
       };
 
       break;
@@ -1631,7 +1632,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
         // Although the sBit is just kinda cursed so perhaps this is the best way - the encoder
         // would have to do some equally cursed stuff to get the right bytes out if we didn't
         // do this.
-        data = getAsTwosComplement(data, 127);
+        data = convertTwosComplementToSignedJsValue(data, 127);
       }
 
       instruction = {
@@ -2370,7 +2371,7 @@ function decodeInstruction(context: DecodingContext): DecodedInstruction {
 
       instruction = {
         kind: loopOrJumpCxInstructionTable[firstByte & 0b0000_0011],
-        op1: getAsTwosComplement(context.instructionBytes[context.index], 127),
+        op1: convertTwosComplementToSignedJsValue(context.instructionBytes[context.index], 127),
       };
 
       break;
@@ -2848,9 +2849,12 @@ function decodeEffectiveAddressCalculation(
   if (category.displacementBytes === 0) {
     displacement = null;
   } else if (category.displacementBytes === 1) {
-    displacement = getAsTwosComplement(context.instructionBytes[context.index + 1], 127);
+    displacement = convertTwosComplementToSignedJsValue(
+      context.instructionBytes[context.index + 1],
+      127,
+    );
   } else {
-    displacement = getAsTwosComplement(
+    displacement = convertTwosComplementToSignedJsValue(
       context.instructionBytes[context.index + 1] +
         (context.instructionBytes[context.index + 2] << 8),
       32767,
@@ -2873,14 +2877,6 @@ function decodeEffectiveAddressCalculation(
     segmentOverridePrefix,
     length,
   };
-}
-
-function getAsTwosComplement(val: number, max: 127 | 32767): number {
-  if (val <= max) {
-    return val;
-  } else {
-    return val - 2 * (max + 1);
-  }
 }
 
 function decodeDestDataForImmediateToAccumulatorInstruction(

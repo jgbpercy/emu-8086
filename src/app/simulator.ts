@@ -11,6 +11,7 @@ import {
   isWordRegister,
   mainRegisterTable,
 } from './register-data';
+import { convertTwosComplementToSignedJsValue } from './twos-complement';
 
 interface _SimulationStatePrimatives {
   ax: number;
@@ -443,6 +444,7 @@ function getSimulatedInstructionData(
         1,
         isWordRegister(instruction.op1),
         instruction.byteLength,
+        false,
       );
 
     case 'pushRegister':
@@ -741,17 +743,8 @@ function getSimulatedInstructionData(
     case 'popfPopFlags': {
       const stackAddress = getMemoryAddress(state, state.sp, 'ss');
 
-      const flagsValue = state.memory.readWord(stackAddress);
-
-      const overflow = !!(flagsValue & OVERFLOW_FLAG);
-      const direction = !!(flagsValue & DIRECTION_FLAG);
-      const interrupt = !!(flagsValue & INTERRUPT_FLAG);
-      const trap = !!(flagsValue & TRAP_FLAG);
-      const sign = !!(flagsValue & SIGN_FLAG);
-      const zero = !!(flagsValue & ZERO_FLAG);
-      const auxCarry = !!(flagsValue & AUX_CARRY_FLAG);
-      const parity = !!(flagsValue & PARITY_FLAG);
-      const carry = !!(flagsValue & CARRY_FLAG);
+      const { overflow, direction, interrupt, trap, sign, zero, auxCarry, parity, carry } =
+        getFlagsFromMemoryAddress(state, stackAddress);
 
       const newSp = state.sp + 2;
 
@@ -1191,6 +1184,97 @@ function getSimulatedInstructionData(
     case 'intTypeSpecified':
       return makeInterruptDiff(state, instruction.op1);
 
+    case 'intoInterruptOnOverflow': {
+      if (!state.overflowFlag) {
+        return makeZeroVariableClockData([makeNextInstructionDiff(state, instruction.byteLength)]);
+      }
+
+      return makeInterruptDiff(state, 4);
+    }
+
+    case 'iretInterruptReturn': {
+      const stackAddress = getMemoryAddress(state, state.sp, 'ss');
+
+      const newIp = state.memory.readWord(stackAddress);
+      const newCs = state.memory.readWord(stackAddress + 2);
+
+      const { overflow, direction, interrupt, trap, sign, zero, auxCarry, parity, carry } =
+        getFlagsFromMemoryAddress(state, stackAddress + 4);
+
+      const newSp = state.sp + 6;
+
+      return makeZeroVariableClockData([
+        makeSetNumberDiff(state, 'ip', newIp),
+        makeSetNumberDiff(state, 'cs', newCs),
+        makeSetFlagDiff(state, 'overflowFlag', overflow),
+        makeSetFlagDiff(state, 'directionFlag', direction),
+        makeSetFlagDiff(state, 'interruptFlag', interrupt),
+        makeSetFlagDiff(state, 'trapFlag', trap),
+        makeSetFlagDiff(state, 'signFlag', sign),
+        makeSetFlagDiff(state, 'zeroFlag', zero),
+        makeSetFlagDiff(state, 'auxCarryFlag', auxCarry),
+        makeSetFlagDiff(state, 'parityFlag', parity),
+        makeSetFlagDiff(state, 'carryFlag', carry),
+        makeSetNumberDiff(state, 'sp', newSp),
+      ]);
+    }
+
+    case 'rolRotateLeft': {
+      const word =
+        instruction.op1.kind === 'reg'
+          ? isWordRegister(instruction.op1)
+          : instruction.op1.length === 2;
+
+      const bits = word ? 16 : 8;
+
+      const rawCount = instruction.op2 === 1 ? 1 : state.cx & 0xff;
+      const rawCountIsOne = rawCount === 1;
+      const normalizedCount = rawCount % bits;
+
+      const destValue = getRegisterOrEacValue(state, instruction.op1, word, 'ds');
+
+      const shiftedValue = destValue << normalizedCount;
+
+      const mainMask = word ? 0xffff : 0xff;
+      const overflowMask = word ? 0xffff0000 : 0xff00;
+
+      const result = (shiftedValue & mainMask) + ((shiftedValue & overflowMask) >> bits);
+
+      const carryFlag = result % 2 === 1;
+
+      if (rawCountIsOne) {
+        const max = word ? 32768 : 128;
+        const highBitWasSet = destValue >= max;
+        const highBitIsSet = result >= max;
+        const overflowFlag = highBitWasSet !== highBitIsSet;
+
+        const diff = [
+          makeNextInstructionDiff(state, instruction.byteLength),
+          ...makeSetRegisterOrMemoryValueDiffs(state, instruction.op1, result, word, 'ds'),
+          makeSetFlagDiff(state, 'overflowFlag', overflowFlag),
+          makeSetFlagDiff(state, 'carryFlag', carryFlag),
+        ];
+
+        if (instruction.op2 === 1) {
+          return makeZeroVariableClockData(diff);
+        } else {
+          return {
+            diff,
+            variableClockCountEstimate: 4 * rawCount,
+          };
+        }
+      } else {
+        return {
+          diff: [
+            makeNextInstructionDiff(state, instruction.byteLength),
+            ...makeSetRegisterOrMemoryValueDiffs(state, instruction.op1, result, word, 'ds'),
+            makeSetFlagDiff(state, 'carryFlag', carryFlag),
+          ],
+          variableClockCountEstimate: 4 * rawCount,
+        };
+      }
+    }
+
     case 'loopneLoopWhileNotEqual': {
       const condition = state.cx - 1 !== 0 && !state.zeroFlag;
 
@@ -1392,6 +1476,180 @@ function getSimulatedInstructionData(
         ]);
       }
     }
+
+    case 'imulIntegerMultiplySigned': {
+      const word =
+        instruction.op1.kind === 'reg'
+          ? isWordRegister(instruction.op1)
+          : instruction.op1.length === 2;
+
+      const sourceValue = convertTwosComplementToSignedJsValue(
+        getRegisterOrEacValue(state, instruction.op1, word, 'ds'),
+        word ? 32767 : 127,
+      );
+
+      const destValue = word
+        ? convertTwosComplementToSignedJsValue(state.ax, 32767)
+        : convertTwosComplementToSignedJsValue(state.ax & 0x00ff, 127);
+
+      const max = word ? 0xffff : 0xff;
+      const min = word ? -0x1_0000 : -0x100;
+
+      const signedResult = sourceValue * destValue;
+
+      const hasHighPart = signedResult > max || signedResult < min;
+
+      const twosComplementResult = signedResult & (word ? 0xffff_ffff : 0xffff);
+
+      if (word) {
+        return makeZeroVariableClockData([
+          makeNextInstructionDiff(state, instruction.byteLength),
+          makeSetNumberDiff(state, 'ax', twosComplementResult & 0xffff),
+          makeSetNumberDiff(state, 'dx', twosComplementResult & 0xffff0000),
+          makeSetFlagDiff(state, 'overflowFlag', hasHighPart),
+          makeSetFlagDiff(state, 'carryFlag', hasHighPart),
+        ]);
+      } else {
+        return makeZeroVariableClockData([
+          makeNextInstructionDiff(state, instruction.byteLength),
+          makeSetNumberDiff(state, 'ax', twosComplementResult),
+          makeSetFlagDiff(state, 'overflowFlag', hasHighPart),
+          makeSetFlagDiff(state, 'carryFlag', hasHighPart),
+        ]);
+      }
+    }
+
+    case 'divDivideUnsigned': {
+      const word =
+        instruction.op1.kind === 'reg'
+          ? isWordRegister(instruction.op1)
+          : instruction.op1.length === 2;
+
+      const sourceValue = getRegisterOrEacValue(state, instruction.op1, word, 'ds');
+
+      if (sourceValue === 0) {
+        return makeInterruptDiff(state, 0); // Probably?
+      }
+
+      const dividend = word ? (state.dx << 8) + state.ax : state.ax;
+
+      const quotient = Math.trunc(dividend / sourceValue);
+      const remainder = dividend % sourceValue;
+
+      if (word) {
+        return makeZeroVariableClockData([
+          makeNextInstructionDiff(state, instruction.byteLength),
+          makeSetNumberDiff(state, 'ax', quotient),
+          makeSetNumberDiff(state, 'dx', remainder),
+        ]);
+      } else {
+        return makeZeroVariableClockData([
+          makeNextInstructionDiff(state, instruction.byteLength),
+          makeSetNumberDiff(state, 'ax', (remainder << 8) + quotient),
+        ]);
+      }
+    }
+
+    case 'idivIntegerDivideSigned': {
+      const word =
+        instruction.op1.kind === 'reg'
+          ? isWordRegister(instruction.op1)
+          : instruction.op1.length === 2;
+
+      const sourceValue = convertTwosComplementToSignedJsValue(
+        getRegisterOrEacValue(state, instruction.op1, word, 'ds'),
+        word ? 32767 : 127,
+      );
+
+      if (sourceValue === 0) {
+        return makeInterruptDiff(state, 0);
+      }
+
+      const dividend = word
+        ? convertTwosComplementToSignedJsValue((state.dx << 8) + state.ax, 32767)
+        : convertTwosComplementToSignedJsValue(state.ax, 127);
+
+      const signedQuotient = Math.trunc(dividend / sourceValue);
+      const signedRemainder = dividend % sourceValue;
+
+      const resultMask = word ? 0xffff : 0xff;
+
+      const twosComplementQuotient = signedQuotient & resultMask;
+      const twosComplementRemainder = signedRemainder & resultMask;
+
+      if (word) {
+        return makeZeroVariableClockData([
+          makeNextInstructionDiff(state, instruction.byteLength),
+          makeSetNumberDiff(state, 'ax', twosComplementQuotient),
+          makeSetNumberDiff(state, 'dx', twosComplementRemainder),
+        ]);
+      } else {
+        return makeZeroVariableClockData([
+          makeNextInstructionDiff(state, instruction.byteLength),
+          makeSetNumberDiff(state, 'ax', (twosComplementRemainder << 8) + twosComplementQuotient),
+        ]);
+      }
+    }
+
+    case 'clcClearCarry':
+      return makeZeroVariableClockData([
+        makeNextInstructionDiff(state, instruction.byteLength),
+        makeSetFlagDiff(state, 'carryFlag', false),
+      ]);
+
+    case 'stcSetCarry':
+      return makeZeroVariableClockData([
+        makeNextInstructionDiff(state, instruction.byteLength),
+        makeSetFlagDiff(state, 'carryFlag', true),
+      ]);
+
+    case 'cliClearInterrupt':
+      return makeZeroVariableClockData([
+        makeNextInstructionDiff(state, instruction.byteLength),
+        makeSetFlagDiff(state, 'interruptFlag', false),
+      ]);
+
+    case 'stiSetInterrupt':
+      return makeZeroVariableClockData([
+        makeNextInstructionDiff(state, instruction.byteLength),
+        makeSetFlagDiff(state, 'interruptFlag', true),
+      ]);
+
+    case 'cldClearDirection':
+      return makeZeroVariableClockData([
+        makeNextInstructionDiff(state, instruction.byteLength),
+        makeSetFlagDiff(state, 'directionFlag', false),
+      ]);
+
+    case 'stdSetDirection':
+      return makeZeroVariableClockData([
+        makeNextInstructionDiff(state, instruction.byteLength),
+        makeSetFlagDiff(state, 'directionFlag', true),
+      ]);
+
+    case 'incRegisterMemory':
+      return makeAddDiffs(
+        state,
+        instruction.op1,
+        1,
+        instruction.op1.kind === 'reg'
+          ? isWordRegister(instruction.op1)
+          : instruction.op1.length === 2,
+        instruction.byteLength,
+        false,
+      );
+
+    case 'decRegisterMemory':
+      return makeSubDiffs(
+        state,
+        instruction.op1,
+        1,
+        instruction.op1.kind === 'reg'
+          ? isWordRegister(instruction.op1)
+          : instruction.op1.length === 2,
+        instruction.byteLength,
+        false,
+      );
 
     default:
       return makeZeroVariableClockData([]);
@@ -2126,4 +2384,43 @@ function sanitize8BitSignExtendedNegatives(value: number): number {
   } else {
     return value;
   }
+}
+
+function getFlagsFromMemoryAddress(
+  state: ReadonlySimulationState,
+  memoryAddress: number,
+): {
+  readonly overflow: boolean;
+  readonly direction: boolean;
+  readonly interrupt: boolean;
+  readonly trap: boolean;
+  readonly sign: boolean;
+  readonly zero: boolean;
+  readonly auxCarry: boolean;
+  readonly parity: boolean;
+  readonly carry: boolean;
+} {
+  const flagsValue = state.memory.readWord(memoryAddress);
+
+  const overflow = !!(flagsValue & OVERFLOW_FLAG);
+  const direction = !!(flagsValue & DIRECTION_FLAG);
+  const interrupt = !!(flagsValue & INTERRUPT_FLAG);
+  const trap = !!(flagsValue & TRAP_FLAG);
+  const sign = !!(flagsValue & SIGN_FLAG);
+  const zero = !!(flagsValue & ZERO_FLAG);
+  const auxCarry = !!(flagsValue & AUX_CARRY_FLAG);
+  const parity = !!(flagsValue & PARITY_FLAG);
+  const carry = !!(flagsValue & CARRY_FLAG);
+
+  return {
+    overflow,
+    direction,
+    interrupt,
+    trap,
+    sign,
+    zero,
+    auxCarry,
+    parity,
+    carry,
+  };
 }
